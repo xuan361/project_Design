@@ -26,7 +26,7 @@ module InstructionMemory(
             4'b0000:begin   //jal
                 rd = mem[IAddress + 1][7:4];
                 imm = mem[IAddress][3:0];
-
+// 0000 0010 0001 0000
             end
             4'b0001:begin   //jalr
                 rd = mem[IAddress + 1][7:4];
