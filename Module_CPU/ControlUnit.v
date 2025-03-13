@@ -25,6 +25,7 @@ module ControlUnit(
     output reg    m2reg, //决定从存储器读取的数据是否需要写回寄存器文件。 0：把ALU的运算结果传回，1为把数据存储器的数据传回
     output reg[1:0]    PCsrc,    //控制程序计数器（PC）的更新来源，通常用于分支或跳转操作。
     output reg    wmem, //控制存储器的写操作, 0为读，1为写
+    output reg memc,    //控制写一字节还是两个字节，memc=0为1字节，memc=1为两个字节。
     output reg[2:0]  ALUOp, //控制 ALU 的操作类型，通常用于选择 ALU 的加法、减法、逻辑运算等操作。0：add, 1：sub, 2：and, 3：or 4:beq 5:ble
     output reg    alucsrc,  // 控制 ALU 的输入来源，通常用于选择 ALU 的操作数。0为寄存器的数（add),1为立即数（addi)
     output reg    wreg,  // 控制寄存器的写操作  1为写回，0为不写回
@@ -35,9 +36,10 @@ initial begin
     m2reg = 0;
     PCsrc = 0;
     wmem = 0;
+    memc = 0;
     ALUOp = 0;
-    // alucsrc = 0;
-    // wreg = 0;
+    alucsrc = 0;
+    wreg = 0;
     jal = 0;
 end
 
@@ -92,21 +94,26 @@ always @(*) begin
         4'b0100:begin   //lb
             m2reg = 1'b1;
             wmem = 1'b0;
+            memc = 0;
             jal = 1'b0;
+            
         end
         4'b0101:begin   //lw
             m2reg = 1'b1;
             wmem = 1'b0;
+            memc = 1;
             jal = 1'b0;
         end
         4'b0110:begin   //sb
             m2reg = 1'b0;
             wmem = 1'b1;
+            memc = 0;
             jal = 1'b0;
         end
         4'b0111:begin   //sw
             m2reg = 1'b0;
             wmem = 1'b1;
+            memc = 1;
             jal = 1'b0;
         end
         4'b1000:begin   //add

@@ -71,7 +71,7 @@ module SingleCPU(
     DataMemory DM(wmem, result, ReadData2, DataOut);
 
     assign currentAddress_2 = currentAddress + 2;
-    assign currentAddress_immediate = currentAddress + ImmE;
+    assign currentAddress_immediate = currentAddress + immExt;
 
     // 选择ALU的操作数 B 是立即数还是寄存器的数据
     Multiplexer21 m21_0(alucsrc, ReadData2, ImmE, B);
@@ -83,7 +83,7 @@ module SingleCPU(
     Multiplexer21 m21_2(jal, WriteData, rcurrentAddress_2, WriteReg);
 
     // 选择写回PC的数据来源，PC+2 或 PC+immExt 或 result
-    Multiplexer31 m31(PCsrc, currentAddress, immExt, result, newAddress)
+    Multiplexer31 m31(PCsrc, currentAddress, immExt, result, newAddress);
 
 
 //    Multiplexer5 m5(RegOut, rd, rt, WriteReg);
