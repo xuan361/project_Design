@@ -46,29 +46,31 @@ end
 always @(*) begin
     case(op)
         4'b0000:begin   //jal
-            // m2reg = 0;
+            m2reg = 0;
             PCsrc = 1; //执行 PC = PC + imm
-            // wmem = 1'b0;
+            wmem = 0;
             ALUOp = 3'b000;
-            // alucsrc = 1'b1;
+            alucsrc = 0;
             wreg = 1'b1;
             jal = 1'b1;
         end
         4'b0001:begin   //jalr
-            m2reg = 1'b0;
+            m2reg = 0;
             PCsrc = 2'b10; //执行 PC = rs1 + imm    
-            wmem = 1'b0;
+            wmem = 0;
             ALUOp = 3'b000;
-            // alucsrc = 1'b1;
+            alucsrc = 0;
             wreg = 1'b1;
             jal = 1'b1;
         end
         4'b0010:begin   //beq
+            PCsrc = 0;
+            memc = 0;
             m2reg = 1'b0;    
             wmem = 1'b0;
             ALUOp = 3'b100;
-            // alucsrc = 1'b1;
-            // wreg = 1'b0;
+            alucsrc = 0;
+            wreg = 1'b0;
             jal = 1'b0;
             if (zero) begin    //作为条件
                 PCsrc = 2'b01;  //执行 PC = PC + imm
@@ -81,8 +83,8 @@ always @(*) begin
             m2reg = 1'b0;    
             wmem = 1'b0;
             ALUOp = 3'b101;
-            // alucsrc = 1'b1;
-            // wreg = 1'b0;
+            alucsrc = 1'b0;
+            wreg = 1'b0;
             jal = 1'b0;
             if (zero) begin    //作为条件
                 PCsrc = 2'b01;  //执行 PC = PC + imm
@@ -93,107 +95,132 @@ always @(*) begin
         end
         4'b0100:begin   //lb
             m2reg = 1'b1;
+            PCsrc = 0;
             wmem = 1'b0;
             memc = 0;
+            ALUOp = 0;
+            alucsrc = 0;
+            wreg = 0;
             jal = 1'b0;
             
         end
         4'b0101:begin   //lw
-            m2reg = 1'b1;
-            wmem = 1'b0;
+            m2reg = 1;
+            PCsrc = 0;
+            wmem = 0;
             memc = 1;
-            jal = 1'b0;
+            ALUOp = 0;
+            alucsrc = 0;
+            wreg = 0;
+            jal = 0;
         end
         4'b0110:begin   //sb
-            m2reg = 1'b0;
-            wmem = 1'b1;
+
+            m2reg = 0;
+            PCsrc = 0;
+            wmem = 1;
             memc = 0;
-            jal = 1'b0;
+            ALUOp = 0;
+            alucsrc = 0;
+            wreg = 0;
+            jal = 0;
         end
         4'b0111:begin   //sw
-            m2reg = 1'b0;
+            m2reg = 0;
+            PCsrc = 0;  
             wmem = 1'b1;
             memc = 1;
+            ALUOp = 0;
+            alucsrc = 0;
+            wreg = 0;
             jal = 1'b0;
         end
         4'b1000:begin   //add
+            m2reg = 0;
+            PCsrc = 0;
+            wmem = 0;
+            memc = 0;
             ALUOp = 3'b000;
             alucsrc = 1'b0;
             wreg = 1'b1;
-
-            m2reg = 1'b0;
-            wmem = 1'b0;
             jal = 1'b0;
         end
         4'b1001:begin   //sub
+            m2reg = 0;
+            PCsrc = 0;
+            wmem = 0;
+            memc = 0;
             ALUOp = 3'b001;
             alucsrc = 1'b0;
             wreg = 1'b1;
-
-            m2reg = 1'b0;
-            wmem = 1'b0;
             jal = 1'b0;
 
         end
         4'b1010:begin   //and
+            m2reg = 0;
+            PCsrc = 0;
+            wmem = 0;
+            memc = 0;
             ALUOp = 3'b010;
             alucsrc = 1'b0;
             wreg = 1'b1;
-
-            m2reg = 1'b0;
-            wmem = 1'b0;
             jal = 1'b0;
             
         end
         4'b1011:begin   //or
+            m2reg = 0;
+            PCsrc = 0;
+            wmem = 0;
+            memc = 0;
             ALUOp = 3'b011;
             alucsrc = 1'b0;
             wreg = 1'b1;
-
-            m2reg = 1'b0;
-            wmem = 1'b0;
             jal = 1'b0;
             
         end
         4'b1100:begin   //addi
+            m2reg = 0;
+            PCsrc = 0;
+            wmem = 0;
+            memc = 0;
             ALUOp = 3'b000;
             alucsrc = 1'b1;
             wreg = 1'b1;
-
-            m2reg = 1'b0;
-            wmem = 1'b0;
             jal = 1'b0;
             
         end
         4'b1101:begin   //subi
+            m2reg = 0;
+            PCsrc = 0;
+            wmem = 0;
+            memc = 0;
             ALUOp = 3'b001;
             alucsrc = 1'b1;
             wreg = 1'b1;
-
-            m2reg = 1'b0;
-            wmem = 1'b0;
             jal = 1'b0;
             
         end
         4'b1110:begin   //andi
+            m2reg = 0;
+            PCsrc = 0;
+            wmem = 0;
+            memc = 0;
             ALUOp = 3'b010;
             alucsrc = 1'b1;
             wreg = 1'b1;
-
-            m2reg = 1'b0;
-            wmem = 1'b0;
             jal = 1'b0;
-            
+
         end
         4'b1111:begin   //ori
+
+            m2reg = 0;
+            PCsrc = 0;
+            wmem = 0;
+            memc = 0;
             ALUOp = 3'b011;
             alucsrc = 1'b1;
             wreg = 1'b1;
-
-            m2reg = 1'b0;
-            wmem = 1'b0;
             jal = 1'b0;
-            
         end
     endcase
 end
