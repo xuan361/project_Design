@@ -15,7 +15,7 @@ module InstructionMemory(
 
     initial 
      begin
-        $readmemb("test/test.txt", mem);  //读取测试文档中的指令
+        $readmemb("D:/learn/Git/testgit/test/test.txt", mem);  //读取测试文档中的指令
      end
 
 
