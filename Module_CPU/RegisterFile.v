@@ -2,6 +2,8 @@
 
 //RegisterFile：储存寄存器组，并根据地址对寄存器组进行读写
 
+//这里一定要修改，之前吧rt 和 rd 弄混了，rt应该是源操作数2，rd是目的操作数
+// 现在不知道该如何选择A_data和B_data,即寄存器的输出，因为信号只有wreg
 module RegisterFile(
     input CLK,
     input RegWre,   // 写使能信号，为1时，在时钟上升沿写入
@@ -31,7 +33,7 @@ module RegisterFile(
     always @(posedge CLK)
     begin
         // 如果寄存器不为0，并且RegWre为真，写入数据
-        if (RegWre && WriteReg != 0) begin
+        if (RegWre && WriteReg ) begin
             register[WriteReg] = WriteData;
         end
     end

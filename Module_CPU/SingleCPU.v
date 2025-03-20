@@ -26,7 +26,7 @@ module SingleCPU(
     output [3:0] rs,
     output [3:0] rt,
     output [3:0] rd,
-    output [3:0] imm,
+    // output [3:0] imm,
 
     output [15:0] ReadData1,
     output [15:0] ReadData2,
@@ -47,28 +47,34 @@ module SingleCPU(
     wire [15:0] immExt; 
     wire [3:0] WriteReg;  
 
+    wire memc;
+    wire [15:0] instruction;
 
 
+// 各模块实例化
     // 控制器
-    ControlUnit cu(op, zero, m2reg, PCsrc, wmem, ALUOp, alucsrc, wreg, jal);
+    ControlUnit cu(op, zero, m2reg, PCsrc, wmem,memc, ALUOp, alucsrc, wreg, jal);
 
     // PC：CLK上升沿触发，更改指令地址
     PC pc(CLK, RESET, newAddress, currentAddress);
 
     // InstructionMemory：储存指令，分割指令
-    InstructionMemory im(InsMemRW, currentAddress, op, rs, rt, rd, imm);
+    InstructionMemory im(InsMemRW, currentAddress, op, rs, rt, rd, instruction);
+    
+    // ImmExt: 用于immediate的扩展
+    ImmExt ImmE(instruction, immExt);
 
     //RegisterFile：储存寄存器组，并根据地址对寄存器组进行读写
+    //要改！！！
     RegisterFile rf(CLK, wreg, rs, rt, WriteReg, WriteData, ReadData1, ReadData2);
 
     //ALU（算术逻辑单元）：用于逻辑指令计算和跳转指令比较
     ALU alu(ALUOp, ReadData1, B,  result, zero);
 
-    // ImmExt: 用于immediate的扩展
-    ImmExt ImmE(imm, immExt);
+
 
     // DataMemory：用于内存存储，内存读写
-    DataMemory DM(wmem, result, ReadData2, DataOut);
+    DataMemory DM(wmem, result, ReadData2, memc, DataOut);
 
     assign currentAddress_2 = currentAddress + 2;
     assign currentAddress_immediate = currentAddress + immExt;
@@ -86,8 +92,9 @@ module SingleCPU(
     Multiplexer31 m31(PCsrc, currentAddress, immExt, result, newAddress);
 
 
-//    Multiplexer5 m5(RegOut, rd, rt, WriteReg);
-//     Multiplexer32 m321(ALUSrcB, extendImmediate, ReadData2, B);
-//     Multiplexer32 m322(ALUM2Reg, DataOut, result, WriteData);
-//     Multiplexer32 m323(PCSrc, currentAddress_immediate, currentAddress_4, newAddress);
+// 下面才是要进行操作的代码
+
+
+
+
 endmodule

@@ -82,7 +82,7 @@ module ControlUnit_tb();
 
         // 测试 zero 信号的影响
         #10 zero = 1'b1;   // 设置 zero 为 1，测试 beq 和 ble 条件
-                #10 op = 4'b0000;  // 测试 jal
+        #10 op = 4'b0000;  // 测试 jal
         #10 op = 4'b0001;  // 测试 jalr
         #10 op = 4'b0010;  // 测试 beq
         #10 op = 4'b0011;  // 测试 ble
