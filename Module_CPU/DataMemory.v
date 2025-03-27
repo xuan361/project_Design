@@ -1,6 +1,6 @@
 
 // DataMemory：用于内存存储，内存读写
-// 逻辑可能有问题，需要修改
+
 module DataMemory(
     input DataMemRW,           //读写信号，1为写，0为读
     input [15:0] DAddress,  //地址
@@ -12,6 +12,7 @@ module DataMemory(
 
     // 模拟内存，以8位为一字节存储，共64字节
     reg[7:0] memory[0:63]; 
+    wire [15:0] DAddress_Standard = (DAddress >> 1) << 1;
 
     // 初始化内存
     integer i;
@@ -26,8 +27,8 @@ module DataMemory(
         // 写入内存,先写高八位，再写低八位
         if (DataMemRW) begin
             if(memc == 1) begin
-                memory[DAddress] = DataIn[15:8];
-                memory[DAddress + 1] = DataIn[7:0];
+                memory[DAddress_Standard] = DataIn[15:8];
+                memory[DAddress_Standard + 1] = DataIn[7:0];
             end
             else begin
                 memory[DAddress] = DataIn[7:0];
@@ -36,8 +37,8 @@ module DataMemory(
         // 读取内存
         else begin
             if(memc == 1) begin
-                DataOut[15:8] = memory[DAddress];
-                DataOut[7:0] = memory[DAddress + 1];
+                DataOut[15:8] = memory[DAddress_Standard];
+                DataOut[7:0] = memory[DAddress_Standard + 1];
             end
             else begin
                 DataOut[7:0] = memory[DAddress];
