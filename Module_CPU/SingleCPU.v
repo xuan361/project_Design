@@ -75,7 +75,7 @@ module SingleCPU(
     assign currentAddress_immediate = currentAddress + immExt;
 
     // 选择ALU的操作数 B 是立即数还是寄存器的数据
-    Multiplexer21 m21_0(alucsrc, ReadData2, ImmE, B);
+    Multiplexer21 m21_0(alucsrc, ReadData2, immExt, B);
     
     // 选择写回寄存器组的数据来源，ALU的结果或存储器的数据
     Multiplexer21 m21_1(m2reg, result, DataOut, back_regiser);
