@@ -2,16 +2,14 @@
 
 //RegisterFile：储存寄存器组，并根据地址对寄存器组进行读写
 
-//这里一定要修改，之前吧rt 和 rd 弄混了，rt应该是源操作数2，rd是目的操作数
-// 现在不知道该如何选择A_data和B_data,即寄存器的输出，因为信号只有wreg
 module RegisterFile(
     input CLK,
     input RegWre,   // 写使能信号，为1时，在时钟上升沿写入
-    input [3:0] rs,            // 源寄存器地址
-    input [3:0] rt,            // 目标寄存器地址
-    input [3:0] WriteReg,      // 将数据写入的寄存器端口，其地址来源rt或rd字段
-    
-    input [15:0] WriteData,    // 写入寄存器的数据输入端口
+    input [3:0] rs,            // 源寄存器地址1
+    input [3:0] rt,            // 源寄存器地址2
+    input [3:0] rd,             // 目标寄存器地址
+    input [15:0] WriteData,    // 写入寄存器的数据
+
     output [15:0] ReadData1,   // rs寄存器数据输出端口
     output [15:0] ReadData2    // rt寄存器数据输出端口
 );
@@ -21,9 +19,9 @@ module RegisterFile(
     // 初始时，将16个寄存器全部赋值为0
     integer i;
     initial 
-     begin
+    begin
         for(i = 0; i < 16; i = i + 1) register[i] <= 0;
-     end
+    end
 
     //assign 保证 ReadData1始终与rs地址的寄存器值相同，ReadData2始终与rt地址的寄存器值相同
     assign ReadData1 = register[rs];
@@ -33,8 +31,8 @@ module RegisterFile(
     always @(posedge CLK)
     begin
         // 如果寄存器不为0，并且RegWre为真，写入数据
-        if (RegWre && WriteReg ) begin
-            register[WriteReg] = WriteData;
+        if (RegWre && rd) begin
+            register[rd] = WriteData;
         end
     end
 
