@@ -12,8 +12,8 @@ module Multiplexer21 (
 );
 
     assign out = control ? in1 : in0;
-
 endmodule
+
 
 module Multiplexer31 (
     input [1:0] PCsrc,
@@ -21,13 +21,13 @@ module Multiplexer31 (
     input [15:0] currentAddress_immediate,
     input [15:0] result,
 
-    output reg[15:0] out
+    output reg[15:0] newAddress
 );
     always @(*)begin
         case(PCsrc)
-            0:  out = currentAddress_2;
-            1:  out = currentAddress_immediate;
-            2:  out = result;
+            0:  newAddress = currentAddress_2;
+            1:  newAddress = currentAddress_immediate;
+            2:  newAddress = result;
         endcase
 
     end
