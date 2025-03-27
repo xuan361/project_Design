@@ -2,7 +2,7 @@
 // DataMemory：用于内存存储，内存读写
 
 module DataMemory(
-    input DataMemRW,           //读写信号，1为写，0为读
+    input wmem,           //读写信号，1为写，0为读
     input [15:0] DAddress,  //地址
     input [15:0] DataIn,     //输入数据
     input memc,             //控制写入字节数，memc=0为1字节，memc=1为两个字节。
@@ -25,7 +25,7 @@ module DataMemory(
     always @(DAddress or DataIn)
     begin
         // 写入内存,先写高八位，再写低八位
-        if (DataMemRW) begin
+        if (wmem) begin
             if(memc == 1) begin
                 memory[DAddress_Standard] = DataIn[15:8];
                 memory[DAddress_Standard + 1] = DataIn[7:0];
