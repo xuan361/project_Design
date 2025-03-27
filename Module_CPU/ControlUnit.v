@@ -56,7 +56,7 @@ always @(*) begin
         end
         4'b0001:begin   //jalr
             m2reg = 0;
-            PCsrc = 2'b10; //执行 PC = rs1 + imm    
+            PCsrc = 2; //执行 PC = rs1 + imm    
             wmem = 0;
             ALUOp = 3'b000;
             alucsrc = 0;
