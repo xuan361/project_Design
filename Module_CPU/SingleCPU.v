@@ -26,7 +26,6 @@ module SingleCPU(
     output [3:0] rs,
     output [3:0] rt,
     output [3:0] rd,
-    // output [3:0] imm,
 
     output [15:0] ReadData1,
     output [15:0] ReadData2,
