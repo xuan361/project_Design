@@ -2,7 +2,7 @@
 
 module Single_CPU_tb();
 
-    reg clk;
+    reg CLK;
     reg RESET;
 
     wire [3:0] op;
@@ -36,17 +36,17 @@ module Single_CPU_tb();
     );
 
     always begin
-        #5 clk = ~clk;  // 每 5 ns 反转一次时钟信号，周期为 10 ns
+        #5 CLK = ~CLK;  // 每 5 ns 反转一次时钟信号，周期为 10 ns
     end
 
     initial begin
-        clk = 0;
+        CLK = 0;
         RESET = 0;
 
         #5 RESET = 1;
 
 
-        #100;
+        #1000;
 
         #10 $finish;
 
