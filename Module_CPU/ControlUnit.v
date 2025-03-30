@@ -50,7 +50,7 @@ always @(*) begin
             PCsrc = 1; //执行 PC = PC + imm
             wmem = 0;
             ALUOp = 3'b000;
-            alucsrc = 0;
+            alucsrc = 0;    
             wreg = 1'b1;
             jal = 1'b1;
         end
@@ -59,7 +59,7 @@ always @(*) begin
             PCsrc = 2; //执行 PC = rs1 + imm    
             wmem = 0;
             ALUOp = 3'b000;
-            alucsrc = 0;
+            alucsrc = 1;    //把立即数传给ALU
             wreg = 1'b1;
             jal = 1'b1;
         end
@@ -72,7 +72,7 @@ always @(*) begin
             alucsrc = 0;
             wreg = 1'b0;
             jal = 1'b0;
-            if (zero) begin    //作为条件
+            if (!zero) begin    //作为条件
                 PCsrc = 2'b01;  //执行 PC = PC + imm
             end
             else begin  //作为正常逻辑语句
@@ -86,7 +86,7 @@ always @(*) begin
             alucsrc = 1'b0;
             wreg = 1'b0;
             jal = 1'b0;
-            if (zero) begin    //作为条件
+            if (!zero) begin    //作为条件
                 PCsrc = 2'b01;  //执行 PC = PC + imm
             end
             else begin  //作为正常逻辑语句

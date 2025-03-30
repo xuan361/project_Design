@@ -16,8 +16,8 @@ module ALU(
             3'b001 : ALUResult = A - B;
             3'b010 : ALUResult = A & B;
             3'b011 : ALUResult = A | B;
-            3'b100 : ALUResult = A == B;
-            3'b101 : ALUResult = A <= B;
+            3'b100 : ALUResult = (A == B);
+            3'b101 : ALUResult = (A <= B);
             default : ALUResult = 16'b0;
         endcase
 
