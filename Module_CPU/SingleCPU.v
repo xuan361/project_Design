@@ -86,7 +86,7 @@ module SingleCPU(
     Multiplexer21 m21_2(jal, back_regiser, currentAddress_2, WriteData);
 
     // 选择写回PC的数据来源，PC+2 或 PC+immExt 或 result
-    Multiplexer31 m31(PCsrc, currentAddress, currentAddress_immediate, result, newAddress);
+    Multiplexer31 m31(PCsrc, currentAddress_2, currentAddress_immediate, result, newAddress);
 
 
 
