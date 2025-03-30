@@ -1,6 +1,6 @@
 
 // DataMemory：用于内存存储，内存读写
-
+//  仍存在的问题：DataOut和memory在仿真图像中一直为0
 module DataMemory(
     input clk,
     input wmem,           //读写信号，1为写，0为读
@@ -13,13 +13,15 @@ module DataMemory(
 
     // 模拟内存，以8位为一字节存储，共64字节
     reg[7:0] memory[0:63]; 
-    wire [15:0] DAddress_Standard = (DAddress >> 1) << 1;
+    wire [15:0] DAddress_Standard;
+    assign DAddress_Standard = (DAddress >> 1) << 1;
 
     // 初始化内存
     integer i;
     initial 
     begin
         for(i = 0; i < 64; i = i + 1) memory[i] = 8'b0;
+        DataOut[15:0] = 0;
     end
 
     //  读写内存

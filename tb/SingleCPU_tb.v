@@ -46,7 +46,7 @@ module Single_CPU_tb();
         #5 RESET = 1;
 
 
-        #1000;
+        #200;
 
         #10 $finish;
 
