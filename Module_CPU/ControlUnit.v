@@ -99,7 +99,7 @@ always @(*) begin
             wmem = 1'b0;
             memc = 0;
             ALUOp = 0;
-            alucsrc = 0;
+            alucsrc = 1;
             wreg = 0;
             jal = 1'b0;
             
@@ -110,7 +110,7 @@ always @(*) begin
             wmem = 0;
             memc = 1;
             ALUOp = 0;
-            alucsrc = 0;
+            alucsrc = 1;
             wreg = 0;
             jal = 0;
         end
@@ -121,7 +121,7 @@ always @(*) begin
             wmem = 1;
             memc = 0;
             ALUOp = 0;
-            alucsrc = 0;
+            alucsrc = 1;
             wreg = 0;
             jal = 0;
         end
@@ -131,7 +131,7 @@ always @(*) begin
             wmem = 1'b1;
             memc = 1;
             ALUOp = 0;
-            alucsrc = 0;
+            alucsrc = 1;
             wreg = 0;
             jal = 1'b0;
         end

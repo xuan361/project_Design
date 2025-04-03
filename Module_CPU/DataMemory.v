@@ -42,20 +42,21 @@ module DataMemory(
                     memory[DAddress] = DataIn[7:0];
                 end
             end
-            // 读取内存
-            else begin
-                if(memc == 1) begin
-                    DataOut[15:8] = memory[DAddress_Standard + 1];
-                    DataOut[7:0] = memory[DAddress_Standard];
-                end
-                else begin
-                    DataOut[7:0] = memory[DAddress];
-                    DataOut[15:8] = 8'b0;
-                end
-            end
         end
     end
     
+    // 读取内存
+    always@(*)begin
+        if(memc == 1) begin
+            DataOut[15:8] = memory[DAddress_Standard + 1];
+            DataOut[7:0] = memory[DAddress_Standard];
+        end
+        else begin
+            DataOut[7:0] = memory[DAddress];
+            DataOut[15:8] = 8'b0;
+        end
+
+    end   
 
 
 endmodule
