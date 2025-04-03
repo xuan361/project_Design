@@ -71,7 +71,7 @@ module SingleCPU(
 
 
     // DataMemory：用于内存存储，内存读写
-    DataMemory DM(clk, wmem, result, ReadData2, memc, DataOut);
+    DataMemory DM(CLK, wmem, result, ReadData2, memc, DataOut);
 
     assign currentAddress_2 = currentAddress + 2;
     assign currentAddress_immediate = currentAddress + immExt;
