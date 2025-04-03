@@ -100,7 +100,7 @@ always @(*) begin
             memc = 0;
             ALUOp = 0;
             alucsrc = 1;
-            wreg = 0;
+            wreg = 1;
             jal = 1'b0;
             
         end
@@ -111,7 +111,7 @@ always @(*) begin
             memc = 1;
             ALUOp = 0;
             alucsrc = 1;
-            wreg = 0;
+            wreg = 1;
             jal = 0;
         end
         4'b0110:begin   //sb
