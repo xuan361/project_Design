@@ -4,6 +4,7 @@
 
 module RegisterFile(
     input CLK,
+    input RESET,
     input RegWre,   // 写使能信号，为1时，在时钟上升沿写入
     input [3:0] rs,            // 源寄存器地址1
     input [3:0] rt,            // 源寄存器地址2
@@ -28,11 +29,16 @@ module RegisterFile(
     assign ReadData2 = register[rt];
 
     // 当写使能信号为1时，在时钟上升沿写入
-    always @(posedge CLK)
+    always @(posedge CLK or negedge RESET)
     begin
-        // 如果寄存器不为0，并且RegWre为真，写入数据
-        if (RegWre && rd) begin
-            register[rd] = WriteData;
+        if(!RESET) begin
+            for(i = 0; i < 16; i = i + 1) register[i] <= 0;
+        end
+        else begin
+            // 如果寄存器不为0，并且RegWre为真，写入数据
+            if (RegWre && rd) begin
+                register[rd] = WriteData;
+            end
         end
     end
 

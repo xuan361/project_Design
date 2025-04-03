@@ -63,7 +63,7 @@ module SingleCPU(
     ImmExt ImmE(instruction, immExt);
 
     //RegisterFile：储存寄存器组，并根据地址对寄存器组进行读写
-    RegisterFile rf(CLK, wreg, rs, rt, rd, WriteData, ReadData1, ReadData2);
+    RegisterFile rf(CLK, RESET, wreg, rs, rt, rd, WriteData, ReadData1, ReadData2);
 
     //ALU（算术逻辑单元）：用于逻辑指令计算和跳转指令比较
     ALU alu(ALUOp, ReadData1, B,  result, zero);
@@ -71,7 +71,7 @@ module SingleCPU(
 
 
     // DataMemory：用于内存存储，内存读写
-    DataMemory DM(CLK, wmem, result, ReadData2, memc, DataOut);
+    DataMemory DM(CLK, RESET, wmem, result, ReadData2, memc, DataOut);
 
     assign currentAddress_2 = currentAddress + 2;
     assign currentAddress_immediate = currentAddress + immExt;
