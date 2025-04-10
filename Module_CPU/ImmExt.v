@@ -41,11 +41,22 @@ always @(*)begin
             immExt[3:0] = imm_4; 
         end
 
-        4'b1100, 4'b1101, 4'b1110, 4'b1111:begin  //addi, subi, andi, ori
+        // 4'b1100, 4'b1101, 4'b1110, 4'b1111:begin  //addi, subi, andi, ori
+        //     imm_4 = instruction[15:12];
+        //     immExt[15:4] = imm_4[3] ? 12'b1111_1111_1111 : 0;
+        //     immExt[3:0] = imm_4; 
+
+        4'b1100, 4'b1101:begin  //addi, subi
             imm_4 = instruction[15:12];
             immExt[15:4] = imm_4[3] ? 12'b1111_1111_1111 : 0;
             immExt[3:0] = imm_4; 
         end
+
+        4'b1110: begin  // lui
+            imm_8 = instruction[15:8];
+            immExt = {imm_8, 8'b0};
+        end
+
     endcase
 end
 
