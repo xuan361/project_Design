@@ -39,7 +39,8 @@ module SingleCPU(
 
     // 各种临时变量
     wire [2:0] ALUOp; 
-    wire m2reg, wmem, alucsrc, wreg, jal,memc;  // 控制信号 
+    wire[1:0]  m2reg;
+    wire wmem, alucsrc, wreg, memc;  // 控制信号 
     wire[1:0] PCsrc;
     wire [15:0] newAddress;
     wire [15:0] currentAddress_2, currentAddress_immediate;
@@ -51,7 +52,9 @@ module SingleCPU(
 
 // 各模块实例化
     // 控制器
-    ControlUnit cu(op, zero, m2reg, PCsrc, wmem,memc, ALUOp, alucsrc, wreg, jal);
+    // ControlUnit cu(op, zero, m2reg, PCsrc, wmem,memc, ALUOp, alucsrc, wreg, jal);
+    ControlUnit cu(op, zero, m2reg, PCsrc, wmem,memc, ALUOp, alucsrc, wreg);
+
 
     // PC：CLK上升沿触发，更改指令地址
     PC pc(CLK, RESET, newAddress, currentAddress);
@@ -77,13 +80,13 @@ module SingleCPU(
     assign currentAddress_immediate = currentAddress + immExt;
 
     // 选择ALU的操作数 B 是立即数还是寄存器的数据
-    Multiplexer21 m21_0(alucsrc, ReadData2, immExt, B);
+    Multiplexer21 m21(alucsrc, ReadData2, immExt, B);
     
-    // 选择写回寄存器组的数据来源，ALU的结果或存储器的数据
-    Multiplexer21 m21_1(m2reg, result, DataOut, back_regiser);
+    // // 选择写回寄存器组的数据来源，ALU的结果或存储器的数据
+    // Multiplexer21 m21_1(m2reg, result, DataOut, back_regiser);
 
-    // 为寄存器组选择数据来源，WriteData或currentAddress_2
-    Multiplexer21 m21_2(jal, back_regiser, currentAddress_2, WriteData);
+    // 为寄存器组选择数据来源，ALU的结果或内存的数据或currentAddress_2或左移8位后的数据
+    Multiplexer41 m41(m2reg, result, DataOut, currentAddress_2, immExt, WriteData);
 
     // 选择写回PC的数据来源，PC+2 或 PC+immExt 或 result
     Multiplexer31 m31(PCsrc, currentAddress_2, currentAddress_immediate, result, newAddress);
