@@ -12,9 +12,10 @@ add 1000
 sub 1001
 and 1010
 or  1011
+加载高位立即数 lui rd, imm 1110
 addi 1100
 subi 1101
-加载高位立即数 lui rd, imm 1110
+
 */
 module ControlUnit(
     input  wire[3:0]  op,   //操作码
