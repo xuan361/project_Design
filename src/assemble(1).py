@@ -71,6 +71,29 @@ def assemble_line(line):
 
     return bin_code.zfill(16)
 
+#增强对输入的汇编语言的读取能力，实现有引号（' 或 "），在有逗号 有多空格 有空行 有注释的情况下也能自动清理并汇编干净
+def clean_asm_lines(raw_lines):
+    cleaned = []
+    for line in raw_lines:
+        # 去除注释部分（从 // 开始）
+        line = line.split('//')[0]
+
+        # 去除开头和结尾空格
+        line = line.strip()
+
+        # 去除开头和结尾的单引号或双引号
+        line = line.strip("'\"")
+
+        # 如果最后是逗号，也去掉
+        if line.endswith(','):
+            line = line[:-1]
+
+        # 如果非空行才保留
+        if line:
+            cleaned.append(line)
+    return cleaned
+
+
 def assemble_program(asm_lines):
     bin_lines = []
     for line in asm_lines:
@@ -85,28 +108,24 @@ def assemble_program(asm_lines):
     return bin_lines
 
 if __name__ == '__main__':
-    asm = [
-        'jal r1, 0',
-        'jalr r1, r3, 6',
-        'addi r3, r1, 2',
-        'subi r4, r1, -2',
-        'beq r3, r4, -6',
-        'ble r3, r5, 0',
-        'add r5, r3, r4',
-        'sub r6, r3, r4',
-        'sb r5, 2(r6)',
-        'sw r5, 4(r6)',
-        'lb r7, 4(r6)',
-        'lw r8, 2(r6)',
-        'and r9, r5, r6',
-        'or r10, r5, r6',
-        'lui r11, 0xA1'
-    ]
+
+    # 注意！！！！从 program.txt 文件读取汇编指令，若文件命名不同则及时更改
+    with open('program.txt', 'r') as f:
+        raw_lines = f.readlines()
+    # 清理输入内容
+    asm = clean_asm_lines(raw_lines)
+
+    # 汇编生成机器码
     output = assemble_program(asm)
+
+
+    #打印机器码到终端
     print("\n机器码输出 ：")
     for line in output:
         print(line)
 
+
+    #输出机器码到文件 machine_code_output.txt
     with open('machine_code_output.txt', 'w') as f:
         for line in output:
             f.write(line + '\n')
