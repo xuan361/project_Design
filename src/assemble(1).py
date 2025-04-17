@@ -72,6 +72,7 @@ def assemble_line(line):
     return bin_code.zfill(16)
 
 #增强对输入的汇编语言的读取能力，实现有引号（' 或 "），在有逗号 有多空格 有空行 有注释的情况下也能自动清理并汇编干净
+#但是似乎好像不太实用，（因为没法换行吗？）
 def clean_asm_lines(raw_lines):
     cleaned = []
     for line in raw_lines:
