@@ -1,8 +1,9 @@
-// jal->addi->subi->beq->jalr->ble->add->sub->sb->sw->lb->lw->and->or->andi->ori
-    0000_0100_0001_0000 
-  //  imm(4),   rd,  jal    (r1) = pc + 2, pc = pc + 4  //此时(r1) = 2, pc =4
+// jal->addi->subi->beq->jalr->ble->add->sub->sb->sw->lb->lw->and->or->lui
+// 0,  C,     D,    2,  1,    3,   4,   5,  6 ,    7
+    0000_0010_0001_0000 
+  //  imm(2),   rd,  jal    (r1) = pc + 2, pc = pc + 4  //此时(r1) = 2, pc =4
 
-    0110_0011_0001_0001     (r1) = pc + 2, pc = (r3) + 6  //此时(r1) = 4, pc = 10
+    0011_0011_0001_0001     (r1) = pc + 2, pc = (r3) + 6  //此时(r1) = 4, pc = 10
   //imm,  rs,  rd,  jalr
 
     0010_0001_0011_1100     
@@ -11,7 +12,7 @@
     1110_0001_0100_1101
   //imm,  rs,  rd,  subi    (r4) = (r1) - (-2)   //此时(r4) = 4, pc = 8
 
-    0100_0011_1010_0010     (r3) == (r4) ? pc = pc - 6 : pc = pc + 2  //此时pc = 2
+    0100_0011_1101_0010     (r3) == (r4) ? pc = pc - 6 : pc = pc + 2  //此时pc = 2
   //rt,  rs, offset, beq
     
     0101_0011_0000_0011
