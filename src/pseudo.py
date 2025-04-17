@@ -1,5 +1,9 @@
 import re
 
+#六条伪指令la lb li addi bge j,但其实 lb addi是已有的指令
+#只有la li bge j是新建的
+
+
 # 原始操作码表
 opcode_map = {
     'jal': '0000',
@@ -19,6 +23,7 @@ opcode_map = {
     'subi': '1101'
 }
 
+#寄存器映射
 register_map = {f"r{i}": format(i, '04b') for i in range(16)}
 
 

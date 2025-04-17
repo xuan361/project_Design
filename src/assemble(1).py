@@ -78,7 +78,7 @@ def assemble_program(asm_lines):
             continue
         try:
             bin_code = assemble_line(line.strip())
-            formatted = "16'b" + '_'.join([bin_code[i:i+4] for i in range(0, 16, 4)])
+            formatted = '_'.join([bin_code[i:i+4] for i in range(0, 16, 4)])
             bin_lines.append(formatted)
         except Exception as e:
             print(f"Error on line: '{line.strip()}': {e}")
@@ -106,3 +106,7 @@ if __name__ == '__main__':
     print("\n机器码输出 ：")
     for line in output:
         print(line)
+
+    with open('machine_code_output.txt', 'w') as f:
+        for line in output:
+            f.write(line + '\n')
