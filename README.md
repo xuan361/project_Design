@@ -1,4 +1,54 @@
-> 4、给定一个汇编程序，制定汇编语法规则，写一个软件将汇编指令翻译成机器指令。再根据汇编语法规则，写一个整数排序程序。
+#### assembler.py从program.txt中读取汇编语言并进行汇编，再输入到machine_code_output.txt
+
+
+
+> (例)
+>
+> （输入）program.txt
+>
+> jal r1, 0
+> jalr r1, r3, 6
+> addi r3, r1, 2
+> subi r4, r1, -2
+> beq r3, r4, -6
+> ble r3, r5, 0
+> add r5, r3, r4
+> sub r6, r3, r4
+> sb r5, 2(r6)
+> sw r5, 4(r6)
+> lb r7, 4(r6)
+> lw r8, 2(r6)
+> and r9, r5, r6
+> or r10, r5, r6
+> lui r11, 0xA1
+>
+> 
+>
+> （输出）machine_code_output.txt
+>
+> 0000_0000_0001_0000
+> 0110_0011_0001_0001
+> 0010_0001_0011_1100
+> 1110_0001_0100_1101
+> 0100_0011_1010_0010
+> 0101_0011_0000_0011
+> 0100_0011_0101_1000
+> 0100_0011_0110_1001
+> 0010_0110_0101_0110
+> 0100_0110_0101_0111
+> 0100_0110_0111_0100
+> 0010_0110_1000_0101
+> 0110_0101_1001_1010
+> 0110_0101_1010_1011
+> 1010_0001_1011_1110
+
+
+
+
+
+
+
+## 4、给定一个汇编程序，制定汇编语法规则，写一个软件将汇编指令翻译成机器指令。再根据汇编语法规则，写一个整数排序程序。
 
 16个16位通用寄存器：r0-r15，其中r0为恒0寄存器，r1为返回地址寄存器ra，r2为栈指针寄存器sp，其余为运算寄存器a0-a12(即r3-r15)，其中a0还作为保存函数参数或返回值。
 
@@ -50,62 +100,4 @@
 
 
 
-
-
-
-
-> > .data
-> > array: .word 64, 34, -25, 12, 22, 11, 90 #
-> > array_size: .byte 7 #
-> > .align 4
-> >
-> > .text
-> > _start:
-> >      la s0, array
-> >      lb s1, array_size
-> >
-> >     # 外层循环计数器 (i)
-> >     li t0, 0                 # t0 = i = 0
-> > outer_loop:
-> >
-> > #检查是否完成所有外层循环 (i < ARRAY_LEN - 1)
-> >
-> > ​    addi t1, s1, -1          # t1 = ARRAY_LEN - 1
-> > ​    bge t0, t1, end_sort     # if i >= ARRAY_LEN-1, 结束
-> > 。。。
-> > end_sort:
->
->     ###### #排序完成，进入无限循环
-> ​    j end_sort
-> ![image](https://github.com/user-attachments/assets/4ca96b3a-1bd9-4bc8-afb8-7a0dc91bafd3)
-
-
-
-
-
-
-
-> .data
-> array: .word 64, 34, -25, 12, 22, 11, 90 #
-> array_size: .byte 7 #
-> .align 4
->
-> .text
-> _start:
->  #把 data section 从 flash 搬运到 ram 中
->  la a0, _data_lma
->  la a1, _data_start
->  la a2, _data_end
->  bge a1, a2, begin
->  。。。
-> begin:#开始
->     la s0, array
->     lb s1, array_size
-> 。。。
-> end_sort:
->
->     ###### #排序完成，进入无限循环
-> ​    j end_sort
-> _data_lma:
-> ![image](https://github.com/user-attachments/assets/a62f89ea-bf69-4c39-851d-d19d08be64f6)
 
