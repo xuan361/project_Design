@@ -1,4 +1,6 @@
-#### assembler.py从program.txt中读取汇编语言并进行汇编，再输入到machine_code_output.txt
+```
+pseudo.py从program.txt中读取汇编语言并进行汇编，再输入到machine_code_output.txt
+```
 
 目前可以使用添加的伪指令la li bge j
 
@@ -17,7 +19,7 @@ ble a3, a4, outer_loop
 
 ![image-20250425185405539](C:\Users\32188\AppData\Roaming\Typora\typora-user-images\image-20250425185405539.png)
 
-![image-20250425185437413](C:\Users\32188\AppData\Roaming\Typora\typora-user-images\image-20250425185437413.png)
+![image-20250425190403673](C:\Users\32188\AppData\Roaming\Typora\typora-user-images\image-20250425190403673.png)
 
 
 
