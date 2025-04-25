@@ -24,138 +24,215 @@ opcode_map = {
 }
 
 #寄存器映射
-register_map = {f"r{i}": format(i, '04b') for i in range(16)}
+register_alias = {
+    'r0': 0, 'ra': 1, 'sp': 2,
+    **{f'a{i}': i + 3 for i in range(13)},  # a0-a12 -> r3-r15
+    # r0为恒0寄存器，r1为返回地址寄存器ra，r2为栈指针寄存器sp，其余为运算寄存器a0-a12(即r3-r15)
+}
 
 
-#  添加伪指令展开函数
-def expand_pseudo_instruction(line, labels):
-    tokens = line.replace(',', '').split()
-    if not tokens:
-        return [line]
-    instr = tokens[0]
+def reg_bin(reg_name):
+    if reg_name in register_alias:
+        reg_num = register_alias[reg_name]
 
-    if instr == 'li':
-        rd, imm = tokens[1], int(tokens[2], 0)
-        hi = (imm >> 8) & 0xFF
-        lo = imm & 0xFF
-        return [f'lui {rd}, {hi}', f'addi {rd}, {rd}, {lo}']
+    elif reg_name.startswith('r'):
+        reg_num = int(reg_name[1:])
 
-    elif instr == 'la':
-        rd, label = tokens[1], tokens[2]
-        addr = labels.get(label, 0)
-        hi = (addr >> 8) & 0xFF
-        lo = addr & 0xFF
-        return [f'lui {rd}, {hi}', f'addi {rd}, {rd}, {lo}']
+    else:
+        raise ValueError(f"Unknown register name: {reg_name}")
 
-    elif instr == 'bge':
-        rs1, rs2, label = tokens[1], tokens[2], tokens[3]
-        return [f'ble {rs2}, {rs1}, {label}']  # bge rs1, rs2 → ble rs2, rs1
-
-    elif instr == 'j':
-        label = tokens[1]
-        return [f'jal r0, {label}']
-
-    return [line]
+    return format(reg_num, '04b')
 
 
-# 解析指令为机器码
-def parse_instruction(line, labels, pc):
-    tokens = line.replace(',', '').split()
-    if not tokens:
-        return None
-    op = tokens[0]
-
-    if op == 'lui':
-        rd = register_map[tokens[1]]
-        imm = format(int(tokens[2], 0), '08b')
-        return f"16'b{opcode_map[op]}_{imm[:4]}_{rd}_{imm[4:]}"
-
-    if op in ('jal', 'jalr'):
-        if op == 'jal':
-            rd = register_map[tokens[1]]
-            imm = format(int(tokens[2], 0), '04b')
-            return f"16'b{opcode_map[op]}_{imm}_{rd}_0000"
-        else:
-            rd = register_map[tokens[1]]
-            rs1 = register_map[tokens[2]]
-            imm = format(int(tokens[3], 0), '04b')
-            return f"16'b{opcode_map[op]}_{imm}_{rs1}_{rd}"
-
-    if op in ('addi', 'subi'):
-        rd = register_map[tokens[1]]
-        rs = register_map[tokens[2]]
-        imm = format(int(tokens[3], 0) & 0xFF, '08b')
-        return f"16'b{opcode_map[op]}_{imm[:4]}_{rs}_{rd}_{imm[4:]}"
-
-    if op in ('beq', 'ble'):
-        rs1 = register_map[tokens[1]]
-        rs2 = register_map[tokens[2]]
-        offset = labels.get(tokens[3], int(tokens[3])) - (pc + 2)
-        imm = format(offset & 0x0F, '04b')
-        return f"16'b{opcode_map[op]}_{rs1}_{rs2}_{imm}"
-
-    if op in ('add', 'sub', 'and', 'or'):
-        rs1 = register_map[tokens[1]]
-        rs2 = register_map[tokens[2]]
-        rd = register_map[tokens[3]]
-        return f"16'b{opcode_map[op]}_{rs1}_{rs2}_{rd}"
-
-    if op in ('lb', 'lw'):
-        rd = register_map[tokens[1]]
-        offset, rs1 = re.findall(r'(-?\d+)\((r\d+)\)', tokens[2])[0]
-        imm = format(int(offset) & 0x0F, '04b')
-        rs = register_map[rs1]
-        return f"16'b{opcode_map[op]}_{imm}_{rs}_{rd}"
-
-    if op in ('sb', 'sw'):
-        rs2 = register_map[tokens[1]]
-        offset, rs1 = re.findall(r'(-?\d+)\((r\d+)\)', tokens[2])[0]
-        imm = format(int(offset) & 0x0F, '04b')
-        rs = register_map[rs1]
-        return f"16'b{opcode_map[op]}_{imm}_{rs}_{rs2}"
-
-    return None
+def imm_bin(val, bits=4):
+    return format((val + (1 << bits)) % (1 << bits), f'0{bits}b')
 
 
-# 汇编主函数
-def assemble_program(lines):
-    labels = {}
+def strip_comments(line):
+    return line.split('//')[0].split('#')[0].split('\t')[0].strip()
+
+
+# 伪指令
+def expand_pseudo_instructions(lines):
+    expanded = []
+    label_map = {}
     pc = 0
-    processed_lines = []
 
-    # 第一遍：收集标签地址
     for line in lines:
-        line = line.split('#')[0].strip()
-        if ':' in line:
-            label = line.replace(':', '').strip()
-            labels[label] = pc
-        elif line:
-            pc += 2
+        clean = strip_comments(line)
 
-    # 第二遍：翻译指令
-    pc = 0
-    for line in lines:
-        line = line.split('#')[0].strip()
-        if not line or line.endswith(':'):
+        if not clean:
             continue
 
-        #  插入伪指令处理逻辑
-        expanded_lines = expand_pseudo_instruction(line, labels)
+        if ':' in clean:
+            label, rest = clean.split(':', 1)
+            label_map[label.strip()] = pc
+            clean = rest.strip()
 
-        for ex_line in expanded_lines:
-            instr = parse_instruction(ex_line, labels, pc)
-            if instr:
-                processed_lines.append(instr)
+            if not clean:
+                continue
+        tokens = clean.split()
+
+        if not tokens:
+            continue
+
+        instr = tokens[0]
+
+        if instr == 'li':
+            rd, imm = tokens[1], int(tokens[2])
+            upper = (imm >> 4) & 0xFF
+            lower = imm & 0xF
+            expanded.append(f'lui {rd}, 0x{upper:X}')
+
+            if lower != 0:
+                expanded.append(f'addi {rd}, {rd}, {lower}')
                 pc += 2
 
-    return processed_lines
+            else:
+                pc += 1
+
+        elif instr == 'la':
+            rd, label = tokens[1], tokens[2]
+            expanded.append(f'lui {rd}, {label}')  # 后续替换地址
+            pc += 1
+
+        elif instr == 'j':
+            label = tokens[1]
+            expanded.append(f'jal r0, {label}')
+            pc += 1
+
+        elif instr == 'bge':
+            rs1, rs2, label = tokens[1], tokens[2], tokens[3]
+            expanded.append(f'ble {rs2}, {rs1}, {label}')
+            pc += 1
+
+        else:
+            expanded.append(clean)
+            pc += 1
+
+    return expanded, label_map
 
 
-# 示例调用
+def resolve_labels(expanded_lines, label_map):
+    resolved = []
+
+    for idx, line in enumerate(expanded_lines):
+        tokens = line.replace(',', '').split()
+
+        if not tokens:
+            continue
+
+        instr = tokens[0]
+
+        if instr in ['ble', 'beq', 'jal']:
+            try:
+                imm = int(tokens[-1])
+                resolved.append(line)
+
+            except ValueError:
+                label = tokens[-1]
+                offset = label_map[label] - idx - 1
+                tokens[-1] = str(offset)
+                resolved.append(' '.join(tokens))
+
+        elif instr == 'lui' and tokens[2] in label_map:
+            addr = label_map[tokens[2]] << 4
+            tokens[2] = f'0x{(addr >> 4):X}'
+            resolved.append(' '.join(tokens))
+
+        else:
+            resolved.append(line)
+
+    return resolved
+
+
+def assemble_line(line):
+    tokens = line.replace(',', '').replace('(', ' ').replace(')', '').split()
+    instr = tokens[0]
+
+    if instr == 'jal':
+        rd = reg_bin(tokens[1])
+        imm = imm_bin(int(tokens[2]))
+        return (imm + rd + opcode_map[instr]).zfill(16)
+
+    elif instr == 'jalr':
+        rd = reg_bin(tokens[1])
+        rs = reg_bin(tokens[2])
+        imm = imm_bin(int(tokens[3]))
+        return imm + rs + rd + opcode_map[instr]
+
+    elif instr in ['addi', 'subi']:
+        rd = reg_bin(tokens[1])
+        rs = reg_bin(tokens[2])
+        imm = imm_bin(int(tokens[3]))
+        return imm + rs + rd + opcode_map[instr]
+
+    elif instr in ['beq', 'ble']:
+        rs1 = reg_bin(tokens[1])
+        rs2 = reg_bin(tokens[2])
+        imm = imm_bin(int(tokens[3]))
+        return rs2 + rs1 + imm + opcode_map[instr]
+
+    elif instr in ['lb', 'lw']:
+        rd = reg_bin(tokens[1])
+        imm = imm_bin(int(tokens[2]))
+        rs = reg_bin(tokens[3])
+        return imm + rs + rd + opcode_map[instr]
+
+    elif instr in ['sb', 'sw']:
+        rt = reg_bin(tokens[1])
+        imm = imm_bin(int(tokens[2]))
+        rs = reg_bin(tokens[3])
+        return imm + rs + rt + opcode_map[instr]
+
+    elif instr in ['add', 'sub', 'and', 'or']:
+        rd = reg_bin(tokens[1])
+        rs1 = reg_bin(tokens[2])
+        rs2 = reg_bin(tokens[3])
+        return rs2 + rs1 + rd + opcode_map[instr]
+
+    elif instr == 'lui':
+        rd = reg_bin(tokens[1])
+        imm = format(int(tokens[2], 16), '08b')
+        return imm + rd + opcode_map[instr]
+
+    else:
+        raise ValueError(f"Unknown instruction: {instr}")
+
+
+# 汇编
+def assemble_program(lines):
+    expanded, label_map = expand_pseudo_instructions(lines)
+    resolved = resolve_labels(expanded, label_map)
+    machine_code = []
+
+    for line in resolved:
+        try:
+            bin_code = assemble_line(line.strip())
+            formatted = '_'.join([bin_code[i:i + 4] for i in range(0, 16, 4)])
+            machine_code.append(formatted)
+
+        except Exception as e:
+            print(f"Error on line: '{line.strip()}': {e}")
+
+    return machine_code
+
+
 if __name__ == '__main__':
-    with open('program.asm',encoding='utf-8') as f:
+
+    # 注意！！从 program.txt 文件读取汇编指令，若文件命名不同则及时更改
+    with open('program.txt', 'r') as f:
         lines = f.readlines()
-    binary = assemble_program(lines)
-    print("机器码输出：")
-    for code in binary:
-        print(code)
+
+    # 汇编生成机器码
+    output = assemble_program(lines)
+
+    # 打印机器码到终端
+    print("\n机器码输出 ：")
+    for line in output:
+        print(line)
+
+    # 输出机器码到文件 machine_code_output.txt
+    with open('machine_code_output.txt', 'w') as f:
+        for line in output:
+            f.write(line + '\n')
