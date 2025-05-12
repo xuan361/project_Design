@@ -177,33 +177,38 @@ def resolve_labels(expanded_lines, label_map):
 
         instr = tokens[0]
 
-        if instr in ['ble', 'beq', 'jal']:
-            # 这些指令的最后一个操作数可能是标签或立即数偏移
-            # jal rd, offset/label  或 beq rs1, rs2, offset/label
-            # tokens[-1] 是 offset 或 label
-            if len(tokens) < (3 if instr == 'jal' else 4): # jal至少3个token, beq/ble至少4个
+        # --- 主要修改部分开始 ---
+        if instr in ['ble', 'beq', 'jal']: # 对分支和跳转指令应用新的逻辑
+            if len(tokens) < (3 if instr == 'jal' else 4):
                 raise ValueError(f"Malformed branch/jump instruction: '{line}' at expanded index {idx}")
 
             last_arg = tokens[-1]
             try:
-                # 尝试将最后一个参数解释为整数（已解析的偏移）
-                int(last_arg, 0) # 使用int(str,0)以自动识别进制
-                resolved.append(line) # 如果是数字，说明可能是之前已处理或直接是数字偏移
+                int(last_arg, 0)
+                resolved.append(line) # 如果已经是数字偏移，则直接使用
             except ValueError:
-                # 如果不是数字，则假定它是标签
+                # 是标签，需要解析
                 label_name = last_arg
                 if label_name not in label_map:
                     raise KeyError(f"Error: Undefined label '{label_name}' used in instruction: '{line}' at expanded index {idx}")
 
-                target_pc_index = label_map[label_name]
+                # 原本的标签目标地址索引:
+                # original_target_pc_index = label_map[label_name]
+
+                # =========== 新增逻辑：根据您的要求调整目标地址 ===========
+                # 您的期望是“跳转到inner loop所在行的下一条语句”。
+                # 我们将此理解为：如果标签 L 指向指令 I，那么跳转实际目标是指令 I 之后的下一条指令。
+                # 所以，我们将原始标签指向的地址索引 +1 作为新的目标地址索引。
+                target_pc_index = label_map[label_name] + 1
+                # =======================================================
+
                 current_pc_index = idx
-                # PC相对寻址偏移 = 目标地址 - 当前指令的下一条指令地址
-                # offset = target_pc_index - (current_pc_index + 1)
+                # PC相对寻址偏移 = (新的目标地址索引) - 当前指令的地址索引 - 1
                 offset = target_pc_index - current_pc_index - 1
 
-                # 替换掉指令中的标签为计算出的偏移量
                 temp_tokens = tokens[:-1] + [str(offset)]
                 resolved.append(' '.join(temp_tokens))
+        # --- 主要修改部分结束 ---
 
         elif instr == 'lui':
             # lui rd, immediate_or_label

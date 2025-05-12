@@ -2,11 +2,59 @@
 pseudo.py从program.txt中读取汇编语言并进行汇编，再输入到machine_code_output.txt
 ```
 
+（2025.5.12改（final））
 
+（那边的仿真已经成功了，现在应该就是最终版了）
+
+修改了inner_loop ,outter_loop,start,这三个标签对应的跳转指令ble,beq ,jal的跳转逻辑。
+
+
+
+例，如果标签 inner_loop 指向指令 x，那么跳转实际目标是指令 x之后的下一条指令
+
+要把原始标签指向的地址索引 +1 作为新的目标地址索引
+
+造成输出的16位机器码里会有一个部分比原先加1
+
+
+
+但是按照之前，inner_loop不对应机器码，会造成死循环，一直重新赋值为0然后加1
+
+（算了算了，反正其实我也不太能完全理解，感谢ai，在此特别鸣谢Gemini，我这样的fvv什么时候会被取代呢？）
+
+
+
+对于ble 和beq， 输出机器码结构是：rt  rs  offset  opcode  ,那应该就是这个offset,第三个位置加1
+
+![image-20250512200825039](C:\Users\32188\AppData\Roaming\Typora\typora-user-images\image-20250512200825039.png)
+
+对于jal，结构是：imm(8位)  rt  opcode，那应该就是imm，第一个位置加1
+
+ ![image-20250512200847564](C:\Users\32188\AppData\Roaming\Typora\typora-user-images\image-20250512200847564.png)
+
+
+
+好了，这下的话看来仿真能成功了，特别鸣谢wzx，你是我的神
+
+![20a35a4dfb05c4ba7feee34d424149b](D:\WeChat\新建文件夹\WeChat Files\wxid_ef16da52vn3122\FileStorage\Temp\20a35a4dfb05c4ba7feee34d424149b.png)
+
+
+
+
+
+（2025.5.12 更）
+
+应该快要结束了，存一下档，本来应该是这个档或者上个档来做第三档的）
+
+sb指令那里对应输出的机器码位置次序不对
+
+![image-20250512200520881](C:\Users\32188\AppData\Roaming\Typora\typora-user-images\image-20250512200520881.png)
+
+
+
+（👇下面是以前的废话）
 
 （2025.5.8 改）
-
-
 
 添加了识别 start 标识符以及 inner_loopX , outer_loopX  (X一般代表数字，一个文件中可能有多个 inner_loop 或outer_loop)
 
@@ -152,7 +200,7 @@ jal r1, start
 
 
 
-（👇下面是以前的废话）
+（👇下面是以前的废话（👇下面是以前的废话））
 
 目前可以使用添加的伪指令la li bge j
 
