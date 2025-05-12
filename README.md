@@ -16,7 +16,6 @@
 
 
 ## feature 分支：
-
 功能模块开发分支，对应于一个特定的功能模块
 该分支以 dev 分支为基线，完成开发工作后再合并到 dev 分支
 **命名规则：feature/NAME 或 feature-NAME**
