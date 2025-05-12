@@ -291,7 +291,7 @@ def assemble_line(line):
         imm_val = int(tokens[2],0) # offset
         rs = reg_bin(tokens[3])   # Base register (rs1 in standard RISC-V)
         imm = imm_bin(imm_val, 4) # 偏移是4位
-        return imm + rs + rt + opcode_map[instr] # 顺序：imm base_reg src_reg op
+        return rt + rs + imm + opcode_map[instr] # 顺序 base_reg src_reg imm op
 
     elif instr in ['add', 'sub', 'and', 'or']: # R-type: rs2 rs1 rd opcode
         rd = reg_bin(tokens[1])
