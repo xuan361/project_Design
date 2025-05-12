@@ -9,11 +9,17 @@ module DataMemory(
     input [15:0] DataIn,     //输入数据
     input memc,             //控制写入字节数，memc=0为1字节，memc=1为两个字节。
 
-    output reg [15:0] DataOut  //输出数据
+    output reg [15:0] DataOut,  //输出数据
+    output reg dig1,     //数码管显示
+    output reg dig2,
+    output reg dig3,
+    output reg dig4
 ); 
+    localparam ledAddr = 16'h2000;
 
     // 模拟内存，以8位为一字节存储，共64字节
     reg[7:0] memory[0:63]; 
+
     wire [15:0] DAddress_Standard;
     assign DAddress_Standard = (DAddress >> 1) << 1;
 
@@ -29,6 +35,22 @@ module DataMemory(
     begin
         if (!RESET) begin
             for(i = 0; i < 64; i = i + 1) memory[i] = 8'b0;
+            dig1 = 1'b0;
+            dig2 = 1'b0;
+            dig3 = 1'b0;
+            dig4 = 1'b0;
+        end
+        else if(DAddress == ledAddr) begin
+            dig1 = DataIn[0];
+        end
+        else if(DAddress == ledAddr + 1) begin
+            dig2 = DataIn[0];
+        end
+        else if(DAddress == ledAddr + 2) begin
+            dig3 = DataIn[0];
+        end
+        else if(DAddress == ledAddr + 3) begin
+            dig4 = DataIn[0];
         end
         else begin
             // 写入内存,先写高八位，再写低八位
