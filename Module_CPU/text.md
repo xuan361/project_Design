@@ -2,7 +2,7 @@
 #机器码顺序：偏移量（imm/offset）_目的操作数_源操作数_操作指令
 
 0.jal rd,imm：
-'''
+'''****
 jump and link
 # 将PC的值加上2，结果写入rd寄存器，rd默认为r1，同时将PC的值设置为PC加上符号位拓展的imm，
 	即PC=PC+sext(imm)。
