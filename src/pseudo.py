@@ -152,18 +152,63 @@ def expand_pseudo_instructions(lines):
             op = tokens[0]
 
             if op == 'li':
-                if len(tokens) < 3: raise ValueError(f"L{line_number+1}: li needs 2 args.")
+                if len(tokens) < 3:
+                    raise ValueError(f"Error on line {line_number + 1}: 'li' instruction requires 2 arguments (rd, immediate). Got: '{instruction_part}'")
                 rd = tokens[1].replace(',', '')
-                try: imm = int(tokens[2], 0)
-                except ValueError: raise ValueError(f"L{line_number+1}: Invalid imm for li: {tokens[2]}")
-                upper_imm = (imm >> 4) & 0xFF
-                lower_imm = imm & 0xF
-                expanded_instructions.append(f'lui {rd}, 0x{upper_imm:X}')
+                try:
+                    imm = int(tokens[2], 0) # 解析立即数
+                except ValueError:
+                    raise ValueError(f"Error on line {line_number + 1}: Invalid immediate value '{tokens[2]}' for 'li'.")
+
+                # 16位 (超出部分会被截断或按 Python 整数处理)
+                target_val = imm & 0xFFFF
+
+                # lui 负责处理前8位 (imm[15:8])
+                upper_8_bits = (target_val >> 8) & 0xFF
+                expanded_instructions.append(f'lui {rd}, 0x{upper_8_bits:X}')
                 pc += 1
-                if lower_imm != 0 or (imm >=0 and imm <=0xF and upper_imm == 0) :
-                    if not (imm == 0 and lower_imm == 0 and upper_imm == 0):
-                        expanded_instructions.append(f'addi {rd}, {rd}, {lower_imm}')
+
+                #    addi 负责处理后8位 (imm[7:0])，可能需要两条 addi 指令
+                #    因为根据
+                #       0010_0001_0011_1100
+                #       //imm   rs,  rd,  addi    (r3) = (r1) + 2     // 此时(r3) = 4, pc = 6
+                #    每條 addi 只能处理4位的立即数
+                #    rd 的当前值是 (upper_8_bits << 8)
+                #    我们需要將 imm[7:0] 加到 rd 上。
+                #    imm[7:0] = (imm[7:4] << 4) + imm[3:0]
+                #    但 addi 是直接相加，所以我們直接加 imm[7:4] 的值和 imm[3:0] 的值。
+
+                middle_4_bits_value = (target_val >> 4) & 0xF  #  imm[7:4] 的数值
+                lower_4_bits_value = target_val & 0xF          #  imm[3:0] 的数值
+
+                # 只有当整个立即数不为0时，才考虑添加 addi
+                # （如果 imm 为0, `lui rd, 0x0` 就已足够）
+                if target_val != 0:
+                    # 如果中间4位 (imm[7:4]) 非零，则添加第一条 addi
+                    if middle_4_bits_value != 0:
+                        expanded_instructions.append(f'addi {rd}, {rd}, {middle_4_bits_value}')
                         pc += 1
+
+                    # 如果最低4位 (imm[3:0]) 非零，则添加第二个 addi
+                    # 或者，如果高12位都是0 (即 upper_8_bits 和 middle_4_bits_value 都是0)，
+                    # 且这个最低4位本身就是整个数（例如 li rd, 5），那么也需要这个addi。
+                    if lower_4_bits_value != 0:
+                        expanded_instructions.append(f'addi {rd}, {rd}, {lower_4_bits_value}')
+                        pc += 1
+                    # 如果一个数是例如 0x0M0 (M非0)，例如 0x020:
+                    # lui rd, 0x0
+                    # addi rd, rd, 2 (middle_4_bits_value)
+                    # lower_4_bits_value 为0，所以不添加第二个 addi。
+
+                # 例如：
+                # - li rd, 0       -> lui rd, 0x0 (1條)
+                # - li rd, 5       -> lui rd, 0x0; addi rd, rd, 5 (2條)
+                # - li rd, 0x20    -> lui rd, 0x0; addi rd, rd, 2 (2條) (0x20 -> middle_4_bits=2, lower_4_bits=0)
+                # - li rd, 0x25    -> lui rd, 0x0; addi rd, rd, 2; addi rd, rd, 5 (3條)
+                # - li rd, 0x1000  -> lui rd, 0x10 (1條) (middle和lower都為0)
+                # - li rd, 0x1006  -> lui rd, 0x10; addi rd, rd, 6 (2條) (middle為0, lower為6)
+                # - li rd, 0x1020  -> lui rd, 0x10; addi rd, rd, 2 (2條) (middle為2, lower為0)
+                # - li rd, 0x1025  -> lui rd, 0x10; addi rd, rd, 2; addi rd, rd, 5 (3條)
 
             elif op == 'la':
                 if len(tokens) < 3: raise ValueError(f"L{line_number+1}: la needs 2 args.")
