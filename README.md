@@ -1,6 +1,76 @@
 ```
-pseudo.py从program.txt中读取汇编语言并进行汇编，再输入到machine_code_output.txt
+pseudo.py从programm.txt中读取汇编语言并进行汇编，再输入到machine_code_output.txt
 ```
+
+（2025.5.22改）
+
+NEW    提出新目标：实现（冒泡）排序
+
+新的汇编语言写在programm.txt里面了，还没有检查输出结果正确性
+
+```
+// 0    rom
+// 1000 ram
+// 2000 led
+// 3000 数码管
+start:  //把 data section 从 flash(ROM) 搬运到 ram 中
+    li a0, 0x100    // flash(ROM) 的起始地址a0
+    li a1, 0x1000  // ram 的起始地址a1 if number > 256 then lui a1, 0x10,  addi a1, a1, 0x00
+    li a2, 0x1006    // ram 的结束地址a2  lui a1, 0x10,  addi a1, 0x06
+
+move_loop:             /// 循环移动数据，数据通过a3寄存器进行传递
+    lb a3, 0(a0)
+    sb a3, 0(a1)
+    addi a0, a0, 1
+    addi a1, a1, 1
+    ble a1, a2, move_loop
+
+begin:
+    addi a3, a1, 0  //头指针a3
+
+
+outer_loop1:
+    addi a4, a3, 1  //尾指针a4
+    inner_loop1:
+        lb a5, 0(a3)
+        lb a6, 0(a4)
+        ble a5, a6, no_swap
+        sb a6, 0(a3)
+        sb a5, 0(a4)
+        no_swap:
+            addi a4, a4, 1
+            ble a4, a2, inner_loop1
+    addi a3, a3, 1
+    ble a3, a2, outer_loop1_mid
+    jal  outer_loop1_out
+
+outer_loop1_mid:
+    jal  outer_loop1
+
+outer_loop1_out:
+
+end_sort:
+    jal r0, end_sort
+
+_data_lma:
+    .byte 13, 12, 7, 12, 9, 11       //内存空间为8位
+```
+
+
+
+```
+// 0    rom
+// 1000 ram
+// 2000 led
+// 3000 数码管
+这几行表示起始地址，之后也会用到后面的
+```
+
+
+
+目前正在追求实现：前256行写机器码（空行全部补0），从257行开始写由 _data_lma 输入的数字的8位二进制数，每行写两个，格式与之前的16位机器码保持一致，都是 XXXX_XXXX_XXXX_XXXX
+
+
 
 （2025.5.12改（final））
 
@@ -301,50 +371,64 @@ ble a3, a4, outer_loop
 16个16位通用寄存器：r0-r15，其中r0为恒0寄存器，r1为返回地址寄存器ra，r2为栈指针寄存器sp，其余为运算寄存器a0-a12(即r3-r15)，其中a0还作为保存函数参数或返回值。
 
 // jal->addi->subi->beq->jalr->ble->add->sub->sb->sw->lb->lw->and->or->andi->ori
-    0000_0100_0001_0000 
+    `0000_0100_0001_0000` 
   //  imm(4),   rd,  jal    (r1) = pc + 2, pc = pc + 4  //此时(r1) = 2, pc =4
 
     0110_0011_0001_0001     (r1) = pc + 2, pc = (r3) + 6  //此时(r1) = 4, pc = 10
+
   //imm,  rs,  rd,  jalr
 
     0010_0001_0011_1100     
+
   //imm   rs,  rd,  addi    (r3) = (r1) + 2     // 此时(r3) = 4, pc = 6
 
     1110_0001_0100_1101
+
   //imm,  rs,  rd,  subi    (r4) = (r1) - (-2)   //此时(r4) = 4, pc = 8
 
     0100_0011_1010_0010     (r3) == (r4) ? pc = pc - 6 : pc = pc + 2  //此时pc = 2
+
   //rt,  rs, offset, beq
     
+
     0101_0011_0000_0011
+
   //rt,  rs, offset, ble    (r3) <= (r5) ? pc = pc  : pc = pc + 2     // pc = 12
     
+
     0100_0011_0101_1000
+
   //rt,   rs,  rd,  add    (r5) = (r3) + (r4)   //此时(r5) = 8
     
+
     0100_0011_0110_1001
+
   //rt,   rs,  rd,  sub    (r6) = (r3) - (r4)   //此时(r6) = 0
 
     0101_0110_0010_0110
+
   //rt,  rs,  imm,  sb      ad = (r6) + 2   (ad) = (r5)     //此时存储单元[2] = 8
 
     0101_0110_0100_0111
+
   //rt,  rs,  imm,  sw      ad = (r6) + 4   (ad) = (r5)     //此时存储单元[4] = 8   存储单元[5] = 0    
 
     0100_0110_0111_0100
+
   //imm,  rs,  rd,  lb      ad = (r6) + 4   (r7) = (ad)     //此时(r7) = 0000_1000
 
     0010_0110_1000_0101
+
   //imm,  rs,  rd,  lw      ad = (r6) + 2   (r8) = (ad)     //此时(r8) = 0000_1000_0000_0000
 
     0110_0101_1001_1010
+
   //rt,   rs,  rd,  and    (r9) = (r5) && (r6)  //此时r9 = 0
 
     0110_0101_1010_1011
+
   //rt,   rs,  rd,  or     (r10) = (r5) || (r6)  //此时r10 = 8 即(0000_0000_0000_1000)
 
     1010_0001_1011_1110
+
   //    imm,    rd,  lui      (r11) = imm << 8  //此时r11 = 1010_0001_0000_0000
-
-
-

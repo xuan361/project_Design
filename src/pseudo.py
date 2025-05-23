@@ -45,14 +45,12 @@ def strip_comments(line): # (稍作调整)
     # 优先移除 // 和 # 类型的注释，然后是 \t 分割，最后去除首尾空格
     line_no_double_slash = line.split('//')[0]
     line_no_hash = line_no_double_slash.split('#')[0]
-    # 如果你的注释风格是 tab 后面的都是注释，这行是必要的
-    # 但如果 tab 可能出现在指令内部（不推荐），则这行可能过于激进
-    # 为了安全，如果tab可能在指令操作数之间，则这行应更细致处理或移除
+
     line_no_tab_comment = line_no_hash.split('\t')[0] # 假设tab后的内容为注释或无关紧要
     return line_no_tab_comment.strip()
 
 
-# 修改后的伪指令扩展函数
+# 伪指令扩展函数
 def expand_pseudo_instructions(lines):
     expanded_instructions = []
     label_map = {}  # 用于存储标签名到其在 expanded_instructions 中的索引
@@ -60,7 +58,7 @@ def expand_pseudo_instructions(lines):
 
     for line_number, raw_line in enumerate(lines):
         # 1. 清理行：移除注释和首尾空格
-        #    标签定义中的冒号':'会在这里被保留
+        #  但是标签定义中的冒号':'会在这里被保留
         line_for_label_detection = strip_comments(raw_line)
 
         if not line_for_label_detection: # 如果行变为空，则跳过
@@ -73,11 +71,11 @@ def expand_pseudo_instructions(lines):
             label_name = label_name.strip()
 
             if not label_name:
-                # 通常空的标签名是错误的，但这里我们选择忽略它并处理行剩下的部分
+                # 通常空的标签名是错误的，但这里选择忽略它并处理行剩下的部分
                 print(f"Warning on line {line_number + 1}: Empty label name found. Processing rest of line: '{rest_of_line.strip()}'")
             elif ' ' in label_name or '\t' in label_name or ',' in label_name:
                 print(f"Warning on line {line_number + 1}: Label name '{label_name}' contains whitespace or comma. This might lead to errors. Ensure labels are single words.")
-            # 你可能想在这里添加更多标签名有效性检查 (e.g., re.match(r'^[a-zA-Z_][a-zA-Z0-9_]*$', label_name))
+            #  (e.g., re.match(r'^[a-zA-Z_][a-zA-Z0-9_]*$', label_name))
 
             if label_name: # 只有当标签名非空时才处理
                 if label_name in label_map:
@@ -89,77 +87,121 @@ def expand_pseudo_instructions(lines):
         if not instruction_part:  # 如果行仅包含标签定义，或者处理后指令部分为空
             continue
 
-        # 3. 处理指令（可能是伪指令或真实指令）
-        # 注意：这里的tokens是基于空格分割的，逗号可能仍附着在操作数上
-        # 后续的 resolve_labels 和 assemble_line 中的 .replace(',', '') 会处理这些逗号
-        tokens = instruction_part.split()
-        if not tokens: # 如果分割后没有token（例如，只有空格的instruction_part）
-            continue
+        # 获取指令的第一个词 (可能是操作码或指令)
+        first_word = instruction_part.split(maxsplit=1)[0]
 
-        op = tokens[0]
-
-        # 伪指令扩展
-        # 注意：参数解析需要增强，这里简化处理，依赖后续阶段的逗号清理
-        if op == 'li':
-            if len(tokens) < 3:
-                raise ValueError(f"Error on line {line_number + 1}: 'li' instruction requires 2 arguments (rd, immediate). Got: '{instruction_part}'")
-            rd = tokens[1].replace(',', '') # 移除寄存器名后的逗号
+        if first_word == '.byte':
             try:
-                imm = int(tokens[2], 0) # 自动检测立即数的进制 (e.g., 0x for hex)
-            except ValueError:
-                raise ValueError(f"Error on line {line_number + 1}: Invalid immediate value '{tokens[2]}' for 'li'.")
+                # 获取 .byte 后面的参数字符串
+                args_content = instruction_part.split('.byte', 1)[1]
+            except IndexError: # .byte 指令单独一行，没有参数
+                raise ValueError(f"Syntax error on line {line_number + 1}: '.byte' directive requires arguments. Got: '{instruction_part}'")
 
-            # 假设 lui 的立即数是8位 (加载到高位), addi 的立即数是4位 (用于li的低位)
-            # 基于之前代码的 li 展开逻辑
-            upper_imm = (imm >> 4) & 0xFF
-            lower_imm = imm & 0xF
+            if not args_content.strip(): # .byte 后面只有空白
+                raise ValueError(f"Syntax error on line {line_number + 1}: '.byte' directive requires arguments. Got: '{instruction_part}'")
 
-            expanded_instructions.append(f'lui {rd}, 0x{upper_imm:X}')
-            pc += 1
-            # 只有当低4位非0时，或者整个数就是0-15（此时lui加载0，addi加载原数）才添加addi
-            # 原来的逻辑是 `if lower_imm != 0:`
-            # 如果 imm 本身就很小 (e.g., 0 to 15), upper_imm 会是0.
-            # li rD, 5 -> lui rD, 0x0; addi rD, rD, 5
-            # li rD, 0 -> lui rD, 0x0; (没有 addi)
-            if lower_imm != 0 or (imm >=0 and imm <=0xF and upper_imm == 0) : # 确保小数值也能正确加载
-                if imm == 0 and lower_imm == 0 and upper_imm == 0: # 特殊处理 li rD, 0，只用lui
-                    pass
-                else:
-                    expanded_instructions.append(f'addi {rd}, {rd}, {lower_imm}')
-                    pc += 1
+            byte_values_str = args_content.strip().split(',')
+
+            # 检查是否真的有数值 (如，处理 ".byte ," 这样的情况)
+            if not any(s.strip() for s in byte_values_str):
+                raise ValueError(f"Error on line {line_number + 1}: '.byte' directive with no data values: '{instruction_part}'")
+
+            for val_str in byte_values_str:
+                val_str = val_str.strip()
+                if not val_str: # 处理像 ".byte 1,,2" 这样中间有空值的情况
+                    raise ValueError(f"Error on line {line_number + 1}: Empty value in '.byte' directive's arguments: '{args_content}'")
+                try:
+                    byte_val = int(val_str, 0) # 自动检测数值进制 (例如 "64" 或 "0x40")
+                except ValueError:
+                    raise ValueError(f"Error on line {line_number + 1}: Invalid number '{val_str}' in '.byte' directive.")
+
+                if not (0 <= byte_val <= 255): # 确保数值在8位无符号整数范围内
+                    raise ValueError(f"Error on line {line_number + 1}: Byte value '{val_str}' (={byte_val}) is out of 8-bit range (0-255).")
+
+                byte_bin = format(byte_val, '08b')
+                # 将8位数据表示为一个16位字，数据在低8位，高8位补0
+                machine_code_for_byte = "00000000" + byte_bin
+                expanded_instructions.append(machine_code_for_byte)
+                pc += 1
+                
+
+        else:
+
+        # 这里的tokens是基于空格分割的，逗号可能仍附着在操作数上
+        # 不过后续的 resolve_labels 和 assemble_line 中的 .replace(',', '') 会处理这些逗号
+            tokens = instruction_part.split()
+            if not tokens: # 如果分割后没有token（例如，只有空格的instruction_part）
+                continue
+
+            op = tokens[0]
+
+            # 伪指令扩展
+            # 注意：参数解析需要增强，这里简化处理，依赖后续阶段的逗号清理
+            if op == 'li':
+                if len(tokens) < 3:
+                    raise ValueError(f"Error on line {line_number + 1}: 'li' instruction requires 2 arguments (rd, immediate). Got: '{instruction_part}'")
+                rd = tokens[1].replace(',', '') # 移除寄存器名后的逗号
+                try:
+                    imm = int(tokens[2], 0) # 自动检测立即数的进制 (e.g., 0x for hex)
+                except ValueError:
+                    raise ValueError(f"Error on line {line_number + 1}: Invalid immediate value '{tokens[2]}' for 'li'.")
+
+                # 假设 lui 的立即数是8位 (加载到高位), addi 的立即数是4位 (用于li的低位)
+                # 基于之前代码的 li 展开逻辑
+                upper_imm = (imm >> 4) & 0xFF
+                lower_imm = imm & 0xF
+
+                expanded_instructions.append(f'lui {rd}, 0x{upper_imm:X}')
+                pc += 1
+                # 只有当低4位非0时，或者整个数就是0-15（此时lui加载0，addi加载原数）才添加addi
+                # 原来的逻辑是 `if lower_imm != 0:`
+                # 如果 imm 本身就很小 (e.g., 0 to 15), upper_imm 会是0.
+                # li rD, 5 -> lui rD, 0x0; addi rD, rD, 5
+                # li rD, 0 -> lui rD, 0x0; (没有 addi)
+                if lower_imm != 0 or (imm >=0 and imm <=0xF and upper_imm == 0) : # 确保小数值也能正确加载
+                    if imm == 0 and lower_imm == 0 and upper_imm == 0: # 特殊处理 li rD, 0，只用lui
+                        pass
+                    else:
+                        expanded_instructions.append(f'addi {rd}, {rd}, {lower_imm}')
+                        pc += 1
 
 
-        elif op == 'la': # la rd, label
-            if len(tokens) < 3:
-                raise ValueError(f"Error on line {line_number + 1}: 'la' instruction requires 2 arguments (rd, label). Got: '{instruction_part}'")
-            rd = tokens[1].replace(',', '')
-            label_ref = tokens[2]
-            # 当前 'la' 仅扩展为一条 'lui' 指令。
-            # 这意味着 'la' 加载的地址，其低位（如8位）必须为0，'lui' 的立即数是地址的高位部分。
-            # 为了更通用的地址加载，'la' 通常会扩展为 'lui' 和 'addi'。
-            # 这里我们保持原样，只生成 'lui'。
-            expanded_instructions.append(f'lui {rd}, {label_ref}') # label_ref 会在 resolve_labels 中被替换
-            pc += 1
+            elif op == 'la': # la rd, label
+                if len(tokens) < 3:
+                    raise ValueError(f"Error on line {line_number + 1}: 'la' instruction requires 2 arguments (rd, label). Got: '{instruction_part}'")
+                rd = tokens[1].replace(',', '')
+                label_ref = tokens[2]
+                # 当前 'la' 仅扩展为一条 'lui' 指令。
+                # 这意味着 'la' 加载的地址，其低位（如8位）必须为0，'lui' 的立即数是地址的高位部分。
+                # 为了更通用的地址加载，'la' 通常会扩展为 'lui' 和 'addi'。
+                # 这里保持原样，只生成 'lui'。
+                expanded_instructions.append(f'lui {rd}, {label_ref}') # label_ref 会在 resolve_labels 中被替换
+                pc += 1
 
-        elif op == 'j': # j label
-            if len(tokens) < 2:
-                raise ValueError(f"Error on line {line_number + 1}: 'j' instruction requires 1 argument (label). Got: '{instruction_part}'")
-            label_ref = tokens[1]
-            expanded_instructions.append(f'jal r0, {label_ref}')
-            pc += 1
+            elif op == 'j': # j label
+                if len(tokens) < 2:
+                    raise ValueError(f"Error on line {line_number + 1}: 'j' instruction requires 1 argument (label). Got: '{instruction_part}'")
+                label_ref = tokens[1]
+                expanded_instructions.append(f'jal r0, {label_ref}')
+                pc += 1
 
-        elif op == 'bge': # bge rs1, rs2, label
-            if len(tokens) < 4:
-                raise ValueError(f"Error on line {line_number + 1}: 'bge' instruction requires 3 arguments (rs1, rs2, label). Got: '{instruction_part}'")
-            rs1 = tokens[1].replace(',', '')
-            rs2 = tokens[2].replace(',', '')
-            label_ref = tokens[3]
-            expanded_instructions.append(f'ble {rs2}, {rs1}, {label_ref}') # 注意 rs1 和 rs2 的顺序为 ble 调换
-            pc += 1
+            elif op == 'jal' and len(tokens) == 2: # 例如: jal some_label
+                label_ref = tokens[1].replace(',', '') # 移除可能存在的逗號
+                expanded_instructions.append(f'jal r0, {label_ref}') # 擴展為 jal r0, some_label
+                pc += 1
 
-        else: # 其他标准指令
-            expanded_instructions.append(instruction_part) # 添加原始（清理过的）指令部分
-            pc += 1
+            elif op == 'bge': # bge rs1, rs2, label
+                if len(tokens) < 4:
+                    raise ValueError(f"Error on line {line_number + 1}: 'bge' instruction requires 3 arguments (rs1, rs2, label). Got: '{instruction_part}'")
+                rs1 = tokens[1].replace(',', '')
+                rs2 = tokens[2].replace(',', '')
+                label_ref = tokens[3]
+                expanded_instructions.append(f'ble {rs2}, {rs1}, {label_ref}') # 注意 rs1 和 rs2 的顺序为 ble 调换
+                pc += 1
+
+            else: # 其他标准指令
+                expanded_instructions.append(instruction_part) # 添加原始（清理过的）指令部分
+                pc += 1
 
     return expanded_instructions, label_map
 
@@ -177,8 +219,7 @@ def resolve_labels(expanded_lines, label_map):
 
         instr = tokens[0]
 
-        # --- 主要修改部分开始 ---
-        if instr in ['ble', 'beq', 'jal']: # 对分支和跳转指令应用新的逻辑
+        if instr in ['ble', 'beq', 'jal']:
             if len(tokens) < (3 if instr == 'jal' else 4):
                 raise ValueError(f"Malformed branch/jump instruction: '{line}' at expanded index {idx}")
 
@@ -191,16 +232,8 @@ def resolve_labels(expanded_lines, label_map):
                 label_name = last_arg
                 if label_name not in label_map:
                     raise KeyError(f"Error: Undefined label '{label_name}' used in instruction: '{line}' at expanded index {idx}")
-
-                # 原本的标签目标地址索引:
-                # original_target_pc_index = label_map[label_name]
-
-                # =========== 新增逻辑：根据您的要求调整目标地址 ===========
-                # 您的期望是“跳转到inner loop所在行的下一条语句”。
-                # 我们将此理解为：如果标签 L 指向指令 I，那么跳转实际目标是指令 I 之后的下一条指令。
-                # 所以，我们将原始标签指向的地址索引 +1 作为新的目标地址索引。
-                target_pc_index = label_map[label_name] + 1
-                # =======================================================
+                #如果标签 L 指向指令 I，那么跳转实际目标是指令 I 之后的下一条指令。
+                target_pc_index = label_map[label_name] + 1  #加1
 
                 current_pc_index = idx
                 # PC相对寻址偏移 = (新的目标地址索引) - 当前指令的地址索引 - 1
@@ -208,7 +241,7 @@ def resolve_labels(expanded_lines, label_map):
 
                 temp_tokens = tokens[:-1] + [str(offset)]
                 resolved.append(' '.join(temp_tokens))
-        # --- 主要修改部分结束 ---
+
 
         elif instr == 'lui':
             # lui rd, immediate_or_label
@@ -248,6 +281,12 @@ def resolve_labels(expanded_lines, label_map):
 
 # 指令汇编函数 (assemble_line)
 def assemble_line(line):
+
+    stripped_line = line.strip()
+    # 检查这行是否已经是16位的二进制字符串 (由 .byte 生成)
+    if re.fullmatch(r'[01]{16}', stripped_line):
+        return stripped_line # 如果是，直接返回
+
     # 移除逗号，并将 "imm(rs)" 格式转换为空格分隔的 "imm rs"
     tokens = line.replace(',', '').replace('(', ' ').replace(')', '').split()
     instr = tokens[0]
@@ -353,7 +392,7 @@ def assemble_program(lines):
 if __name__ == '__main__':
     # 注意！！从 program.txt 文件读取汇编指令，若文件命名不同则及时更改
     try:
-        with open('program.txt', 'r', encoding='utf-8') as f:
+        with open('programm.txt', 'r', encoding='utf-8') as f:
             lines = f.readlines()
     except FileNotFoundError:
         print("Error: program.txt not found. Please ensure the file exists in the same directory.")
