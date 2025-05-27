@@ -1,0 +1,32 @@
+create_clock -name sys_clk -period 20.000 [get_ports sys_clk]
+
+set_property PACKAGE_PIN W19 [get_ports sys_clk]
+set_property PACKAGE_PIN N15 [get_ports sys_rst_n]
+set_property IOSTANDARD LVCMOS33 [get_ports {sys_clk sys_rst_n}]
+
+set_property PACKAGE_PIN K18 [get_ports {sel[0]}]
+set_property PACKAGE_PIN K16 [get_ports {sel[1]}]
+set_property PACKAGE_PIN L16 [get_ports {sel[2]}]
+set_property PACKAGE_PIN G20 [get_ports {sel[3]}] 
+set_property PACKAGE_PIN H20 [get_ports {sel[4]}]
+set_property PACKAGE_PIN H18 [get_ports {sel[5]}]
+
+set_property PACKAGE_PIN U22  [get_ports {seg[6]}]
+set_property PACKAGE_PIN P19  [get_ports {seg[5]}]
+set_property PACKAGE_PIN W21  [get_ports {seg[4]}] 
+set_property PACKAGE_PIN V22  [get_ports {seg[3]}]
+set_property PACKAGE_PIN AB20 [get_ports {seg[2]}]
+set_property PACKAGE_PIN W22  [get_ports {seg[1]}]
+set_property PACKAGE_PIN AA20 [get_ports {seg[0]}]
+set_property PACKAGE_PIN AA21 [get_ports {seg[6]}] 
+
+set_property IOSTANDARD LVCMOS33 [get_ports {sel[*] seg[*]}]
+set_property DRIVE 8 [get_ports {sel[*] seg[*]}]
+set_property PULLUP true [get_ports {sel[*]}]    
+
+set_property PACKAGE_PIN N20 [get_ports led1]  
+set_property PACKAGE_PIN M20 [get_ports led2]
+set_property PACKAGE_PIN N22 [get_ports led3]
+set_property PACKAGE_PIN M22 [get_ports led4] 
+set_property IOSTANDARD LVCMOS33 [get_ports {led1 led2 led3 led4}]
+set_property DRIVE 8 [get_ports {led1 led2 led3 led4}]
