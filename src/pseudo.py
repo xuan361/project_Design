@@ -27,6 +27,13 @@ register_alias = {
     # r0为恒0寄存器，r1为返回地址寄存器ra，r2为栈指针寄存器sp，其余为运算寄存器a0-a12(即r3-r15)
 }
 
+# 如果需要，可以进行反向映射显示
+reg_num_to_name = {v: k for k, v in register_alias.items()}
+for i in range(16): # 确保所有 r0-r15 都有一个默认名称（如果不在alias中）
+    if i not in reg_num_to_name:
+        reg_num_to_name[i] = f'r{i}'
+
+
 def reg_bin(reg_name):
     if reg_name in register_alias:
         reg_num = register_alias[reg_name]
@@ -34,11 +41,14 @@ def reg_bin(reg_name):
         reg_num = int(reg_name[1:])
     else:
         raise ValueError(f"Unknown register name: {reg_name}")
+    if not (0 <= reg_num <= 15):
+        raise ValueError("Register out of bounds")
     return format(reg_num, '04b')
 
 def imm_bin(val, bits=4):
-    # 负立即数
-    if val < 0:
+    if not isinstance(val, int):
+        val = int(str(val),0) # Allow hex strings like "0x..."
+    if val < 0:# 负立即数
         val = (1 << bits) + val
     return format(val % (1 << bits), f'0{bits}b')
 

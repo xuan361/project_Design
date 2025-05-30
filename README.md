@@ -2,6 +2,24 @@
 pseudo.py从program.txt中读取汇编语言并进行汇编，再输入到machine_code_output.txt
 ```
 
+#### **（2025.5.31改（1））**
+
+**正在准备完善decode_and_execute函数**
+
+
+
+> 刚完成的：
+>
+> 在保留原代码pseudo.py的前提下，让windows.py读取原代码中所需的函数，如opcode_map   reg_bin(reg_name)等，以减少windows.py的大小与长度
+
+
+
+
+
+
+
+（👇下面是以前的废话）
+
 
 
 #### **（2025.5.30改）**
@@ -19,10 +37,6 @@ pseudo.py从program.txt中读取汇编语言并进行汇编，再输入到machin
 
 
 
-
-
-
-（👇下面是以前的废话）
 
 
 
