@@ -1,6 +1,6 @@
 import re
 
-# 原始操作码表 (保持不变)
+# 原始操作码表
 opcode_map = {
     'jal': '0000',
     'jalr': '0001',
@@ -24,6 +24,7 @@ opcode_map = {
 register_alias = {
     'r0': 0, 'ra': 1, 'sp': 2,
     **{f'a{i}': i + 3 for i in range(13)},
+    # r0为恒0寄存器，r1为返回地址寄存器ra，r2为栈指针寄存器sp，其余为运算寄存器a0-a12(即r3-r15)
 }
 
 def reg_bin(reg_name):
@@ -36,13 +37,13 @@ def reg_bin(reg_name):
     return format(reg_num, '04b')
 
 def imm_bin(val, bits=4):
-    # 对于负立即数，确保它们在指定位数内以二进制补码形式正确表示
+    # 负立即数
     if val < 0:
-        val = (1 << bits) + val # Calculates two's complement for negative numbers
+        val = (1 << bits) + val
     return format(val % (1 << bits), f'0{bits}b')
 
 
-def strip_comments(line): # (稍作调整)
+def strip_comments(line):
     # 优先移除 // 和 # 类型的注释，然后是 \t 分割，最后去除首尾空格
     line_no_double_slash = line.split('//')[0]
     line_no_hash = line_no_double_slash.split('#')[0]
@@ -54,11 +55,11 @@ def strip_comments(line): # (稍作调整)
 # 伪指令扩展函数
 def expand_pseudo_instructions(lines):
     expanded_instructions = []    # 存儲指令字串 (lui, addi, add 等)
-    label_map = {}              # 存儲指令標籤的 "PC" (索引)
-    pc = 0                      # 指令的程序計數器
+    label_map = {}              # 存储指令标签的 "PC" (索引)
+    pc = 0                      # 指令的程序计数器
 
-    data_lma_values = []        # 專門存儲 _data_lma 的原始數值
-    active_data_collection_label = None # 用於追蹤當前是否在為 _data_lma 收集數據
+    data_lma_values = []        # 专门存储 _data_lma 的原始數值
+    active_data_collection_label = None # 用于追踪当前是否在为 _data_lma 收集数据
 
     for line_number, raw_line in enumerate(lines):
         line_for_label_detection = strip_comments(raw_line)
@@ -80,25 +81,25 @@ def expand_pseudo_instructions(lines):
                 print(f"Warning on line {line_number + 1}: Label '{label_name}' has space/comma.")
 
             if label_name:
-                if label_name in label_map: # 檢查是否与 data_lma_values 相關標籤衝突 (如果有多個數據標籤)
+                if label_name in label_map: # 检查是否与 data_lma_values 相关标签冲突 (如果有多个数据标签)
                     raise ValueError(f"Error on line {line_number + 1}: Duplicate label '{label_name}'")
 
-                active_data_collection_label = label_name # 設置當前活動標籤
-                if label_name != '_data_lma': # 普通指令標籤
+                active_data_collection_label = label_name # 设置当前活动标签
+                if label_name != '_data_lma': # 普通指令标签
                     label_map[label_name] = pc
-                # 对于 _data_lma，不將其 pc 存入 label_map，因為它的数据单独处理
+                # 对于 _data_lma，不将其 pc 存入 label_map，因为它的数据单独处理
 
             instruction_part = rest_of_line.strip()
 
-        # 如果這一行除了標籤外沒有其他內容，則跳过后續的指令/數據處理
+        # 如果这一行除了标签外没有其他內容，则跳过后续的指令/数据处理
         if not instruction_part:
-            # 如果仅仅是 "_data_lma:" 这样的一行，active_data_collection_label 已被設置
-            # 如果是 "other_label:"，active_data_collection_label 也被設置
+            # 如果仅仅是 "_data_lma:" 这样的一行，active_data_collection_label 已被设置
+            # 如果是 "other_label:"，active_data_collection_label 也被设置
             continue
 
         first_word = instruction_part.split(maxsplit=1)[0]
 
-        # 檢查是否為 _data_lma 活動標籤下的 .byte 指令
+        # 检查是否为 _data_lma 活动标签下的 .byte 指令
         if active_data_collection_label == '_data_lma' and first_word == '.byte':
             try:
                 args_content = instruction_part.split('.byte', 1)[1]
@@ -122,31 +123,30 @@ def expand_pseudo_instructions(lines):
                 if not (0 <= byte_val <= 255):
                     raise ValueError(f"L{line_number + 1}: Byte '{val_str}' out of 0-255 for _data_lma.")
 
-                data_lma_values.append(byte_val) # 存儲原始數值
+                data_lma_values.append(byte_val) # 存储原始数值
 
-            # 如果 _data_lma: 和 .byte 在同一行，或 .byte 是緊跟 _data_lma: 後的第一個有效部分，那麼處理完這一行 .byte 後，我們認為 _data_lma 的數據定義結束了（簡化處理）。
-            # 如果一個標籤不是 _data_lma，或者指令不是 .byte，則 active_data_collection_label 會在下一輪循環開始時被新的標籤覆蓋，或者如果下一行沒有標籤，它會保持。
-            # 為了避免非 _data_lma 標籤後的 .byte 被錯誤收集，或 _data_lma 後的非 .byte 行被忽略，在處理完 _data_lma 的 .byte 后，或遇到非 _data_lma 標籤的指令行時，可以重置它。
-            # 此處簡化：假設 _data_lma 的 .byte 要么同在一行，要么紧跟其后。
-            # 遇到任何常規指令處理時，應清除 active_data_collection_label (如果它是_data_lma)。
-            if not current_line_had_label: # 如果 .byte 指令獨占一行，在其標籤之後
-                active_data_collection_label = None # 清除狀態，避免影響下一行
+            # 如果 _data_lma: 和 .byte 在同一行，或 .byte 是紧跟 _data_lma: 后的第一个有效部分，那么处理完这一行 .byte 后，认为 _data_lma 的数据定义結束
+            # 如果一个标签不是 _data_lma，或者指令不是 .byte，则 active_data_collection_label 会在下一轮循环开始时被新的标签覆盖，或者如果下一行没有标签，它将保持
+            # 为了避免非 _data_lma 标签后的 .byte 被错误收集，或 _data_lma 后的非 .byte 行被忽略，在处理完 _data_lma 的 .byte 后，或遇到非 _data_lma 标签的指令行时，可以重置它
+            # 遇到任何常规指令处理时，清除 active_data_collection_label (如果它是_data_lma)
+            if not current_line_had_label: # 如果 .byte 指令独占一行，在其标签之后
+                active_data_collection_label = None # 清除状态，避免干扰下一行
 
-        # 处理不属于 _data_lma 的 .byte 指令 (如果有的話，按舊方式或報錯)
+        # 应该用不上
+        # 处理不属于 _data_lma 的 .byte 指令 (如果有的话，按老方式或报错)
         # elif first_word == '.byte':
-        #     # ... 按舊方式處理，將 "00000000XXXXXXXX" 加入 expanded_instructions ...
-        #     # 同時 pc 也需要增加
-        #     active_data_collection_label = None # 清除非 _data_lma 標籤的影響
+        #     # 按老方式处理，將 "00000000XXXXXXXX" 加入 expanded_instructions
+        #     # 同时 pc 也需要增加
+        #     active_data_collection_label = None # 清除非 _data_lma 标签的影响
 
         else:
-            # 處理所有常規指令和偽指令 (li, la, j, add 等)
-            if active_data_collection_label == '_data_lma': # 如果之前是_data_lma，但現在不是.byte了
-                active_data_collection_label = None # 重置狀態
+            # 处理所有常规指令和伪指令
+            if active_data_collection_label == '_data_lma': # 如果之前是_data_lma，但现在不是.byte了
+                active_data_collection_label = None # 重置状态
 
             tokens = instruction_part.split()
             if not tokens:
-                # 這一行在標籤後可能是空的，或者 strip 後變空
-                # `if not instruction_part: continue` 應該已經處理了這種情況
+                # 这一行在标签后可能是空的，或者 strip 后
                 continue
 
             op = tokens[0]
@@ -172,43 +172,33 @@ def expand_pseudo_instructions(lines):
                 #    因为根据
                 #       0010_0001_0011_1100
                 #       //imm   rs,  rd,  addi    (r3) = (r1) + 2     // 此时(r3) = 4, pc = 6
-                #    每條 addi 只能处理4位的立即数
+                #    每条 addi 只能处理4位的立即数
                 #    rd 的当前值是 (upper_8_bits << 8)
-                #    我们需要將 imm[7:0] 加到 rd 上。
+                #    需要 imm[7:0] 加到 rd 上。
                 #    imm[7:0] = (imm[7:4] << 4) + imm[3:0]
-                #    但 addi 是直接相加，所以我們直接加 imm[7:4] 的值和 imm[3:0] 的值。
+                #    但 addi 是直接相加，所以直接加 imm[7:4] 的值和 imm[3:0] 的值。
 
-                middle_4_bits_value = (target_val >> 4) & 0xF  #  imm[7:4] 的数值
-                lower_4_bits_value = target_val & 0xF          #  imm[3:0] 的数值
+                middle_4_bits_value = (target_val >> 4) & 0xF  #  imm[7:4]
+                lower_4_bits_value = target_val & 0xF          #  imm[3:0]
 
                 # 只有当整个立即数不为0时，才考虑添加 addi
-                # （如果 imm 为0, `lui rd, 0x0` 就已足够）
+                # （如果 imm 为0, `lui rd, 0x0` 足够）
                 if target_val != 0:
                     # 如果中间4位 (imm[7:4]) 非零，则添加第一条 addi
                     if middle_4_bits_value != 0:
                         expanded_instructions.append(f'addi {rd}, {rd}, {middle_4_bits_value}')
                         pc += 1
-
                     # 如果最低4位 (imm[3:0]) 非零，则添加第二个 addi
                     # 或者，如果高12位都是0 (即 upper_8_bits 和 middle_4_bits_value 都是0)，
-                    # 且这个最低4位本身就是整个数（例如 li rd, 5），那么也需要这个addi。
+                    # 且这个最低4位本身就是整个数（例如 li rd, 5），那么也需要这个addi
+
                     if lower_4_bits_value != 0:
                         expanded_instructions.append(f'addi {rd}, {rd}, {lower_4_bits_value}')
                         pc += 1
-                    # 如果一个数是例如 0x0M0 (M非0)，例如 0x020:
+                    # 如果一个数是例如 0x0M0 (M非0)，例如 0x020，即0x0020
                     # lui rd, 0x0
                     # addi rd, rd, 2 (middle_4_bits_value)
-                    # lower_4_bits_value 为0，所以不添加第二个 addi。
-
-                # 例如：
-                # - li rd, 0       -> lui rd, 0x0 (1條)
-                # - li rd, 5       -> lui rd, 0x0; addi rd, rd, 5 (2條)
-                # - li rd, 0x20    -> lui rd, 0x0; addi rd, rd, 2 (2條) (0x20 -> middle_4_bits=2, lower_4_bits=0)
-                # - li rd, 0x25    -> lui rd, 0x0; addi rd, rd, 2; addi rd, rd, 5 (3條)
-                # - li rd, 0x1000  -> lui rd, 0x10 (1條) (middle和lower都為0)
-                # - li rd, 0x1006  -> lui rd, 0x10; addi rd, rd, 6 (2條) (middle為0, lower為6)
-                # - li rd, 0x1020  -> lui rd, 0x10; addi rd, rd, 2 (2條) (middle為2, lower為0)
-                # - li rd, 0x1025  -> lui rd, 0x10; addi rd, rd, 2; addi rd, rd, 5 (3條)
+                    # lower_4_bits_value 为0，不用第二个 addi
 
             elif op == 'la':
                 if len(tokens) < 3: raise ValueError(f"L{line_number+1}: la needs 2 args.")
@@ -240,7 +230,7 @@ def expand_pseudo_instructions(lines):
 
     return expanded_instructions, label_map, data_lma_values
 
-# 修改后的标签解析函数
+# 标签解析函数
 def resolve_labels(expanded_lines, label_map):
     resolved = []
     for idx, line in enumerate(expanded_lines):
@@ -261,7 +251,7 @@ def resolve_labels(expanded_lines, label_map):
             last_arg = tokens[-1]
             try:
                 int(last_arg, 0)
-                resolved.append(line) # 如果已经是数字偏移，则直接使用
+                resolved.append(line) # 如果已经偏移，则直接使用
             except ValueError:
                 # 是标签，需要解析
                 label_name = last_arg
@@ -286,14 +276,14 @@ def resolve_labels(expanded_lines, label_map):
             immediate_or_label_arg = tokens[2]
             if immediate_or_label_arg in label_map:
                 # 如果 lui 的第二个参数是一个已定义的标签 (通常来自 'la' 伪指令)
-                # 这里的逻辑是：label_map 中存储的值直接作为 lui 的立即数，CPU 执行 lui 时会将此立即数左移（如8位）
-                # 例如：la a0, myData -> lui a0, myData_val_for_lui
+                # 逻辑：label_map 中存储的值直接作为 lui 的立即数，CPU 执行 lui 时会将此立即数左移（如8位）
+                # 例：la a0, myData -> lui a0, myData_val_for_lui
                 # 其中 myData_val_for_lui 是 label_map['myData'] 的值
 
                 # 假设 label_map[label_name] 存储的是该标签对应的PC索引（或某种地址表示）
                 # 对于 `la` 展开成的 `lui rd, label`, 这个 `label` 应该被替换成该标签地址的高位部分。
                 # 如果 `la` 只生成 `lui`，那么 `lui` 加载的值（来自label_map）会被CPU左移。
-                # 例如，如果 `mylabel` 在 `pc=20 (0x14)`，那么 `lui rd, mylabel` 会变成 `lui rd, 0x14`。
+                # 若 `mylabel` 在 `pc=20 (0x14)`，那么 `lui rd, mylabel` 会变成 `lui rd, 0x14`。
                 # CPU 执行时 `rd = 0x14 << 8 = 0x1400`
 
                 label_value = label_map[immediate_or_label_arg]
@@ -303,8 +293,7 @@ def resolve_labels(expanded_lines, label_map):
                 temp_tokens[2] = f'0x{label_value:X}'
                 resolved.append(' '.join(temp_tokens))
             else:
-                # 如果不是标签，则假定它是普通的立即数（可能是 "0xHH" 或十进制数）
-                # assemble_line 会处理它
+                # 如果不是标签，则假定它是普通的立即数（可能是 "0xHH" 或十进制数），让assemble_line 处理
                 resolved.append(line)
         else:
             # 其他指令直接通过
@@ -328,23 +317,22 @@ def assemble_line(line):
         imm_val = int(tokens[2], 0) # 支持各种进制的立即数
         imm = imm_bin(imm_val, 8) # 假设jal的立即数是8位 for this ISA
         # RISC-V JAL has a 20-bit imm. This is custom.
-        # For your 16-bit format: imm(8) rd(4) opcode(4)
-        # The format was imm + rd + opcode. Let's assume 8 bit imm.
+        # 16-bit format: imm(8) rd(4) opcode(4)
         return imm + rd + opcode_map[instr] # Total 16 bits
 
     elif instr == 'jalr': # I-type like: imm[7:0] rs1 rd opcode
         rd = reg_bin(tokens[1])
         rs = reg_bin(tokens[2]) # rs1
         imm_val = int(tokens[3],0)
-        imm = imm_bin(imm_val, 4) # 假设 JALR 的立即数是4位 for this ISA
-        # Format: imm(4) rs1(4) rd(4) opcode(4)
+        imm = imm_bin(imm_val, 4)
+        # imm(4) rs1(4) rd(4) opcode(4)
         return imm + rs + rd + opcode_map[instr]
 
     elif instr in ['addi', 'subi']: # I-type: imm[3:0] rs1 rd opcode
         rd = reg_bin(tokens[1])
         rs = reg_bin(tokens[2]) # rs1
         imm_val = int(tokens[3],0)
-        imm = imm_bin(imm_val, 4) # 立即数是4位
+        imm = imm_bin(imm_val, 4)
         return imm + rs + rd + opcode_map[instr]
 
     elif instr in ['beq', 'ble']: # SB-type variant: rs2 rs1 imm[3:0] opcode
@@ -381,17 +369,17 @@ def assemble_line(line):
         imm_val = int(tokens[2], 0) # 支持各种进制
         if not (0 <= imm_val <= 0xFF): # LUI的立即数通常是无符号的，表示高位
             print(f"Warning: LUI immediate '{tokens[2]}' (value: {imm_val}) is outside the typical 8-bit unsigned range (0-255). It will be truncated/wrapped.")
-        imm = format(imm_val & 0xFF, '08b') # 取低8位作为LUI的立即数
+        imm = format(imm_val & 0xFF, '08b') # 取低8位作为lui的立即数
         return imm + rd + opcode_map[instr] # 顺序：imm rd op
 
     else:
         raise ValueError(f"Unknown instruction: {instr} in line '{line}'")
 
 
-# 主汇编程序 (保持不变)
+# 主汇编程序
 def assemble_program(lines):
     expanded, label_map = expand_pseudo_instructions(lines)
-
+    # 调试部分，应该用不上了
     # print("--- Expanded Instructions ---")
     # for i, l in enumerate(expanded):
     #     print(f"{i}: {l}")
@@ -401,7 +389,7 @@ def assemble_program(lines):
     # print("---------------------------")
 
     resolved = resolve_labels(expanded, label_map)
-
+    # 调试部分，应该用不上了
     # print("--- Resolved Instructions ---")
     # for i, l in enumerate(resolved):
     #     print(f"{i}: {l}")
@@ -417,10 +405,10 @@ def assemble_program(lines):
         except Exception as e:
             # 包含行号和内容的错误信息，便于调试
             print(f"Error assembling line #{line_num + 1} (resolved content: '{line_content.strip()}'): {e}")
-            # 可以选择在这里 re-raise e 如果希望程序因错误停止
+
     return machine_code
 
-# 主执行块 (保持不变)
+# 主执行块
 if __name__ == '__main__':
     # 注意！！从 program.txt 文件读取汇编指令，若文件命名不同则及时更改
     try:
@@ -435,21 +423,23 @@ if __name__ == '__main__':
     # 解析指令中的标签
     resolved_instr_strings = resolve_labels(expanded_instr_strings, label_map)
 
-    instruction_machine_code_raw = [] # 存儲純16位二進位指令 (無底線)
-    #print("\n--- Assembling Instructions ---") # 調試信息
+    instruction_machine_code_raw = [] # 存储纯16位二进制指令
+    # 调试部分，应该用不上了
+    #print("\n--- Assembling Instructions ---") #
     for i, line_content in enumerate(resolved_instr_strings):
         try:
-            # print(f"Assembling instruction line {i}: {line_content.strip()}") # 調試
+            # 调试部分，应该用不上了
+            # print(f"Assembling instruction line {i}: {line_content.strip()}")
             bin_code = assemble_line(line_content.strip()) # assemble_line 返回 "XXXXXXXXXXXXXXXX"
             instruction_machine_code_raw.append(bin_code)
         except Exception as e:
             print(f"Error assembling instruction line #{i + 1} (resolved: '{line_content.strip()}'): {e}")
             # exit(1) # 发生错误时可以选择退出
 
-    # 4.  ROM 輸出部分 (前256行)
+    # 4.  ROM 输出部分 (前256行)
     rom_output_lines = []
     for i in range(len(instruction_machine_code_raw)):
-        if i < 256: # 最多取256條指令放入ROM
+        if i < 256: # 最多取256条指令放入ROM
             formatted_bin_code = '_'.join([instruction_machine_code_raw[i][j:j+4] for j in range(0, 16, 4)])
             rom_output_lines.append(formatted_bin_code)
 
@@ -462,14 +452,15 @@ if __name__ == '__main__':
 
     # 5.  Data (_data_lma) 输出部分 (从第257行开始)
     data_output_lines = []
-    #print(f"\n--- Formatting _data_lma ({len(data_lma_numeric_values)} bytes) ---") # 調試信息
+    # 调试部分，应该用不上了
+    #print(f"\n--- Formatting _data_lma ({len(data_lma_numeric_values)} bytes) ---")
     i = 0
     while i < len(data_lma_numeric_values):
         byte1_val = data_lma_numeric_values[i]
         byte1_bin = format(byte1_val, '08b')
         byte1_formatted = f"{byte1_bin[0:4]}_{byte1_bin[4:8]}" # "XXXX_XXXX"
 
-        if i + 1 < len(data_lma_numeric_values): # 如果還有下一個位元組配對
+        if i + 1 < len(data_lma_numeric_values): # 如果还有下一个数配对
             byte2_val = data_lma_numeric_values[i+1]
             byte2_bin = format(byte2_val, '08b')
             byte2_formatted = f"{byte2_bin[0:4]}_{byte2_bin[4:8]}" # "YYYY_YYYY"
@@ -491,4 +482,5 @@ if __name__ == '__main__':
     with open(output_filename, 'w', encoding='utf-8') as f:
         for line in final_output_lines:
             f.write(line + '\n')
+    # 调试部分，应该用不上了
     #print(f"\nMachine code also written to {output_filename}")
