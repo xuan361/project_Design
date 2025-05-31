@@ -449,15 +449,15 @@ if __name__ == '__main__':
     # 4.  ROM 输出部分 (前256行)
     rom_output_lines = []
     for i in range(len(instruction_machine_code_raw)):
-        if i < 256: # 最多取256条指令放入ROM
+        if i < 128: # 最多取128条指令放入ROM
             formatted_bin_code = '_'.join([instruction_machine_code_raw[i][j:j+4] for j in range(0, 16, 4)])
             rom_output_lines.append(formatted_bin_code)
 
     # 如果指令不足256行，用0填充
-    while len(rom_output_lines) < 256:
+    while len(rom_output_lines) < 128:
         rom_output_lines.append("0000_0000_0000_0000")
 
-    if len(instruction_machine_code_raw) > 256:
+    if len(instruction_machine_code_raw) > 128:
         print(f"Warning: {len(instruction_machine_code_raw)} instructions generated, but ROM section is limited to 256 lines. Truncating.")
 
     # 5.  Data (_data_lma) 输出部分 (从第257行开始)

@@ -591,7 +591,7 @@ class App:
 
     def assemble_code(self):
         self.status_label.config(text="正在汇编")
-        self.root.update_idletasks() # Refresh UI to show "Assembling..."
+        self.root.update_idletasks()
 
         asm_code = self.code_text.get('1.0', tk.END)
         asm_lines = asm_code.splitlines()
@@ -600,10 +600,10 @@ class App:
 
         if success:
             self.status_label.config(text="汇编成功， 等待执行")
-            self.simulator.halted = False # Ready to run
+            self.simulator.halted = False
         else:
             self.status_label.config(text=f"汇编失败: {message}")
-            self.simulator.halted = True # Cannot run
+            self.simulator.halted = True
 
         self.update_ui_state()
 
@@ -631,49 +631,15 @@ class App:
 
 
 if __name__ == '__main__':
-    # --- Critical: Replace these placeholders with your actual assembler functions ---
-    # You need to copy your `expand_pseudo_instructions`, `resolve_labels`,
-    # and `assemble_line` functions from your original script into the space
-    # marked "Placeholder for your existing assembler functions" above,
-    # or ensure they are correctly imported if in a separate file.
-    # The current placeholders are VERY basic and will not work for complex code.
-    # Make sure they match the interface (arguments and return values) expected by
-    # `Simulator16Bit.load_program_from_source`.
-    #
-    # For example, your `assemble_line` needs to correctly parse various instruction formats.
-    # Your `expand_pseudo_instructions` needs to handle labels and pseudo-ops correctly.
-    # Your `resolve_labels` needs to calculate offsets.
-    # -------------------------------------------------------------------------------
 
-    # Example to make the placeholder `assemble_line` slightly more functional for testing `lui` and `addi`
-    # You should replace this with YOUR actual functions.
     _original_opcode_map = pse.opcode_map.copy()
     _original_reg_alias = pse.register_alias.copy()
     _original_reg_bin = pse.reg_bin
     _original_imm_bin = pse.imm_bin
 
-    # --- Start of your actual assembler code ---
-    # Copy your `opcode_map`, `register_alias` here if they are different
-    # Copy your `reg_bin`, `imm_bin`, `strip_comments` here
-    # Copy your `expand_pseudo_instructions`, `resolve_labels`, `assemble_line` here
-    # --- Make sure they are defined globally or within the Simulator/App class if appropriate ---
-
-    # ---- Example of where your functions would go (replace with your actual code) ----
-    # opcode_map = { ... your definitions ... }
-    # register_alias = { ... your definitions ... }
-    # def reg_bin(reg_name): ...
-    # def imm_bin(val, bits=4): ...
-    # def strip_comments(line): ...
-    # def expand_pseudo_instructions(lines): ...
-    # def resolve_labels(expanded_lines, label_map): ...
-    # def assemble_line(line): ...
-    # ---- End of your actual assembler code section ----
-
-    # Restore original placeholders if user doesn't fill them in, to avoid NameError for now
-    # (This is just for the provided snippet to run without the user immediately pasting their code)
     if 'opcode_map' not in globals(): opcode_map = _original_opcode_map
     if 'register_alias' not in globals(): register_alias = _original_reg_alias
-    if 'reg_bin' not in globals() or pse.reg_bin.__doc__ is None : reg_bin = _original_reg_bin # approx check
+    if 'reg_bin' not in globals() or pse.reg_bin.__doc__ is None : reg_bin = _original_reg_bin
     if 'imm_bin' not in globals() or pse.imm_bin.__doc__ is None : imm_bin = _original_imm_bin
 
 
