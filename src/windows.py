@@ -459,7 +459,7 @@ class App:
         self.root.title("自定义ISA的16位RISC单周期CPU")
         self.simulator = Simulator16Bit()
 
-        main_frame = ttk.Frame(root, padding="10")
+        main_frame = ttk.Frame(root, padding="2")
         main_frame.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
         root.columnconfigure(0, weight=1)
         root.rowconfigure(0, weight=1)
@@ -467,7 +467,7 @@ class App:
         # --- 代码编辑区和行号区 ---
         # 创建一个框架来容纳行号和代码文本区
         code_area_frame = ttk.Frame(main_frame)
-        code_area_frame.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S), padx=5, pady=5)
+        code_area_frame.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S), padx=5, pady=(0, 5))
         main_frame.columnconfigure(0, weight=3) # 给代码区分配更多权重
         main_frame.rowconfigure(0, weight=1)    # 让代码区可以垂直伸展
 
@@ -479,12 +479,12 @@ class App:
         # 行号区 (tk.Text)
         self.line_numbers_text = tk.Text(code_area_frame, width=4, padx=3, takefocus=0, border=0,
                                          background='lightgrey', state='disabled', wrap='none',
-                                          font=('Consolas', 10)) # 与代码区字体一致
+                                          font=('Arial', 12))
         self.line_numbers_text.grid(row=1, column=0, sticky='ns')
 
         # 代码编辑区 (tk.Text)
         self.code_text = tk.Text(code_area_frame, width=60, height=25, wrap='none', undo=True,
-                                 font=('Consolas', 10)) # 使用等宽字体
+                                 font=('Arial', 12))
         self.code_text.grid(row=1, column=1, sticky='nsew')
 
         # 垂直滚动条 (tk.Scrollbar)
@@ -523,7 +523,7 @@ class App:
         # ... (其他按钮也 pack 到 controls_frame) ...
         self.step_btn = ttk.Button(controls_frame, text="单步", command=self.step_code, state=tk.DISABLED)
         self.step_btn.pack(side=tk.LEFT, padx=2)
-        self.run_btn = ttk.Button(controls_frame, text="行", command=self.run_code, state=tk.DISABLED)
+        self.run_btn = ttk.Button(controls_frame, text="执行", command=self.run_code, state=tk.DISABLED)
         self.run_btn.pack(side=tk.LEFT, padx=2)
         self.reset_btn = ttk.Button(controls_frame, text="重置", command=self.reset_simulator, state=tk.DISABLED)
         self.reset_btn.pack(side=tk.LEFT, padx=2)
@@ -532,7 +532,7 @@ class App:
         self.status_label.grid(row=4, column=0, columnspan=3, sticky=(tk.W, tk.E), pady=(5,0))
 
         # --- 右侧面板：寄存器和内存视图 ---
-        right_pane = ttk.Frame(main_frame, padding="5")
+        right_pane = ttk.Frame(main_frame, padding="0")
         right_pane.grid(row=0, column=1, sticky=(tk.W, tk.E, tk.N, tk.S), padx=5, pady=5)
         main_frame.columnconfigure(1, weight=1) # 给右侧面板分配权重
         # ... (右侧面板的寄存器和内存视图代码保持不变，确保它们 grid 到 right_pane) ...
@@ -543,11 +543,11 @@ class App:
         for i in range(16):
             reg_name_display = f'r{i}'
             ttk.Label(reg_frame, text=f"{reg_name_display:>3}:").grid(row=i, column=0, sticky=tk.W, padx=2, pady=1)
-            self.reg_labels[i] = ttk.Label(reg_frame, text="0 (0x0000)", width=18, relief=tk.GROOVE, anchor=tk.W)
+            self.reg_labels[i] = ttk.Label(reg_frame, text="0 (0x0000)", font=("Arial", 12),width=18, relief=tk.GROOVE, anchor=tk.W)
             self.reg_labels[i].grid(row=i, column=1, sticky=tk.W, padx=2, pady=1)
         self.pc_label_title = ttk.Label(reg_frame, text="PC:")
         self.pc_label_title.grid(row=16, column=0, sticky=tk.W, padx=2, pady=(5,1))
-        self.pc_label_val = ttk.Label(reg_frame, text="0 (0x0000)", width=18, relief=tk.GROOVE, anchor=tk.W)
+        self.pc_label_val = ttk.Label(reg_frame, text="0 (0x0000)", font=("Arial", 12),width=18, relief=tk.GROOVE, anchor=tk.W)
         self.pc_label_val.grid(row=16, column=1, sticky=tk.W, padx=2, pady=(5,1))
         ttk.Label(right_pane, text="内存视图 (前16字):").grid(row=2, column=0, sticky=tk.W, pady=(10,0))
         self.mem_labels = []
@@ -556,7 +556,7 @@ class App:
         for i in range(16):
             addr_label = ttk.Label(mem_frame, text=f"0x{i:03X}:")
             addr_label.grid(row=i, column=0, sticky=tk.W, padx=2, pady=1)
-            val_label = ttk.Label(mem_frame, text="0000_0000_0000_0000", font=("Courier", 10), relief=tk.GROOVE, anchor=tk.W)
+            val_label = ttk.Label(mem_frame, text="0000_0000_0000_0000", font=("Arial", 12), relief=tk.GROOVE, anchor=tk.W)
             val_label.grid(row=i, column=1, sticky=tk.W, padx=2, pady=1)
             self.mem_labels.append(val_label)
 
