@@ -23,7 +23,6 @@ module PC(
             currentAddress <= newAddress;
         else
             currentAddress <= currentAddress;
-
     end
 
 endmodule

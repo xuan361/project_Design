@@ -3,12 +3,12 @@
 module SixDigitDisplay(
     input clk,           // 系统时钟（50MHz）
     input rst_n,         // 复位信号（低有效）
-    input [3:0] data0,   // 第1位数据（DIG1，0-15）
-    input [3:0] data1,   // 第2位数据（DIG2）
-    input [3:0] data2,   // 第3位数据（DIG3）
-    input [3:0] data3,   // 第4位数据（DIG4）
-    input [3:0] data4,   // 第5位数据（DIG5）
-    input [3:0] data5,   // 第6位数据（DIG6）
+    input [7:0] data0,   // 第1位数据（DIG1，0-15）
+    input [7:0] data1,   // 第2位数据（DIG2）
+    input [7:0] data2,   // 第3位数据（DIG3）
+    input [7:0] data3,   // 第4位数据（DIG4）
+    input [7:0] data4,   // 第5位数据（DIG5）
+    input [7:0] data5,   // 第6位数据（DIG6）
     output reg [6:0] seg,// 段选信号（共阳，a-g=seg[6:0]）
     output reg [5:0] sel // 位选信号（低有效，DIG1-DIG6）
 );
@@ -17,8 +17,8 @@ parameter CLK_DIV = 16'd49999; // 50MHz→1kHz分频系数
 
 reg [15:0] clk_cnt;      // 时钟分频计数器
 reg [2:0] scan_cnt;      // 扫描计数器（0-5，对应DIG1-DIG6）
-reg [3:0] data_reg;      // 当前显示数据
-reg [3:0] data_store [5:0]; // 数据锁存寄存器（0-5对应DIG1-DIG6）
+reg [7:0] data_reg;      // 当前显示数据
+reg [7:0] data_store [5:0]; // 数据锁存寄存器（0-5对应DIG1-DIG6）
 
 
 // 时钟分频（50MHz→1kHz）

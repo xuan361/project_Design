@@ -21,13 +21,18 @@ module InstructionMemory(
     output reg[15:0] DataFromROM
 );
 
-    reg[15:0] ROM[0:511]; //ROM 用于存储指令数据，总共有 512 个 16 位的元素。
-    reg cnt = 0;
+    reg[15:0] ROM[0:255]; //ROM 用于存储指令数据，总共有 256 个 16 位的元素。也就是512个字节。
+    integer i;
 
     // initial 
     // begin
     //     $readmemb("D:/learn/Git/testgit/test/test2.txt", ROM);  //读取测试文档中的指令
     // end
+    initial begin
+        for(i = 0; i < 256; i = i + 1) begin
+            ROM[i] = 16'b0;
+        end
+    end
 
 
     always @(posedge CLK)begin
@@ -43,7 +48,10 @@ module InstructionMemory(
         rt = ROM[IAddress >> 1][15:12];
         instruction = ROM[IAddress >> 1];
 
-        DataFromROM = ROM[ROMDataAddress];
+        if(ROMDataAddress[0] == 0)
+            DataFromROM = {8'b0, ROM[ROMDataAddress >> 1][15:8]};
+        else
+            DataFromROM = {8'b0, ROM[ROMDataAddress >> 1][7:0]};
     end
 
 

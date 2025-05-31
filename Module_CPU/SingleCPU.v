@@ -22,7 +22,8 @@
 
 module SingleCPU(
     input CLK,
-    input RESET,    //cpu执行
+    input RESET,    //cpu执行,低电平有效
+    input wait_transport,   //等待传输信号
     input uart_rx_pin,    // UART串行数据输入
 
     output  led1,     //led灯显示
@@ -30,17 +31,17 @@ module SingleCPU(
     output  led3,
     output  led4,    // led4指示CPU暂停状态(1=暂停/加载, 0=加载完成/运行)
 
-    output reg [6:0] seg,// 段选信号（共阳，a-g=seg[6:0]）
-    output reg [5:0] sel // 位选信号（低有效，DIG1-DIG6）
+    output  [6:0] seg,// 段选信号（共阳，a-g=seg[6:0]）
+    output  [5:0] sel // 位选信号（低有效，DIG1-DIG6）
     );
 
     //  1. 定义状态，用于处理字节接收和拼接
-    localparam S_WAIT_COUNT    = 4'b0001; // 等待接收指令总数的低字节
-    localparam S_WAIT_COUNT_MSB    = 4'b0010; // 等待接收指令总数的高字节
-    localparam S_LOADING_INSTR_LSB = 4'b0100; // 等待接收指令的低字节
-    localparam S_LOADING_INSTR_MSB = 4'b1000; // 等待接收指令的高字节
-    localparam S_LOAD_DONE         = 4'b1001; // 加载完成，等待启动
-    localparam S_RUNNING           = 4'b1010; // CPU运行
+    localparam S_WAIT_COUNT    = 4'b0001; // 等待接收指令总数的低字节 1
+    localparam S_WAIT_COUNT_MSB    = 4'b0010; // 等待接收指令总数的高字节 2
+    localparam S_LOADING_INSTR_LSB = 4'b0011; // 等待接收指令的低字节 3
+    localparam S_LOADING_INSTR_MSB = 4'b0100; // 等待接收指令的高字节 4
+    localparam S_LOAD_DONE         = 4'b0101; // 加载完成，等待启动 5
+    localparam S_RUNNING           = 4'b0110; // CPU运行 6
 
     // 2. 添加状态寄存器、计数器和临时字节存储器
     reg [3:0] state_reg;
@@ -87,11 +88,13 @@ module SingleCPU(
     wire [15:0] instruction;
     wire [15:0] back_regiser;
 
+    wire led4_from_DM;
+
     // 3. 拼接逻辑
     assign MachineCodeData = {uart_received_byte, temp_lsb_reg}; // MSB在高位，LSB在低位
 
     // 4. 根据状态控制LED4和CPU运行
-    assign led4 = (state_reg != S_LOAD_DONE) && (state_reg != S_RUNNING);
+    assign led4 = ((state_reg == S_LOAD_DONE) || (state_reg == S_RUNNING)) ? led4_from_DM : 1'b1;
     assign cpu_run_enable = (state_reg == S_RUNNING);
     assign cpu_rst = RESET || !((state_reg == S_LOAD_DONE) || (state_reg == S_RUNNING));
 
@@ -158,10 +161,18 @@ module SingleCPU(
             S_RUNNING: begin
                 if (!RESET) begin
                     // 保持运行，CPU核心会被复位
+
                 end
+                // else if(wait_transport)
+                //     state_reg <= S_WAIT_COUNT;
             end
             default: state_reg <= S_WAIT_COUNT;
         endcase
+    end
+
+    always @(posedge CLK) begin
+        if(wait_transport)
+            state_reg <= S_WAIT_COUNT;
     end
 
     // 6. 指令存储器写使能逻辑
@@ -186,7 +197,7 @@ module SingleCPU(
 
 
     // PC：CLK上升沿触发，更改指令地址
-    PC pc(CLK, cpu_rst, cpu_run_enable,  newAddress, currentAddress);
+    PC pc(CLK, RESET, cpu_run_enable,  newAddress, currentAddress);
 
     // InstructionMemory：储存指令，分割指令
     InstructionMemory im(CLK, instr_mem_write_enable, MachineCodeAddress, MachineCodeData, ROMDataAddress, currentAddress, op, rs, rt, rd, instruction, DataFromROM);
@@ -195,13 +206,13 @@ module SingleCPU(
     ImmExt ImmE(instruction, immExt);
 
     //RegisterFile：储存寄存器组，并根据地址对寄存器组进行读写
-    RegisterFile rf(CLK, cpu_rst, wreg && cpu_run_enable, rs, rt, rd, WriteData, ReadData1, ReadData2);
+    RegisterFile rf(CLK, RESET, wreg && cpu_run_enable, rs, rt, rd, WriteData, ReadData1, ReadData2);
 
     //ALU（算术逻辑单元）：用于逻辑指令计算和跳转指令比较
     ALU alu(ALUOp, ReadData1, B,  result, zero);
 
     // DataMemory：用于内存存储，内存读写
-    DataMemory DM(CLK, cpu_rst, wmem && cpu_run_enable, result, ReadData2, memc ,DataFromROM, DataOut, led1, led2, led3, led4, ROMDataAddress, seg, sel);
+    DataMemory DM(CLK, RESET, wmem && cpu_run_enable, result, ReadData2, memc ,DataFromROM, DataOut, led1, led2, led3, led4_from_DM, ROMDataAddress, seg, sel);
 
     assign currentAddress_2 = currentAddress + 2;
     assign currentAddress_immediate = currentAddress + immExt;
