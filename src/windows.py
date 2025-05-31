@@ -153,7 +153,11 @@ class Simulator16Bit:
             print(f"Invalid instruction word: {instruction_word} at PC={self.pc}")
             return
 
-        # 从 pseudo.py 导入的 opcode_map (在 __init__ 中存为 self.OPCODE_MAP)
+        # 从 pseudo.py 导入的 opcode_map
+
+        # (在 __init__ 中存为 self.OPCODE_MAP)
+        # 不是，这对吗?等下检查一下？
+
 
         # R-type (add,sub,and,or): rs2(4) rs1(4) rd(4) opcode(4) -> instr[0:4] instr[4:8] instr[8:12] instr[12:16]
         # I-type (addi,subi,jalr):imm(4) rs1(4) rd(4) opcode(4) -> instr[0:4] instr[4:8] instr[8:12] instr[12:16]
@@ -390,6 +394,7 @@ class Simulator16Bit:
         self.registers[register_alias['r0']] = 0
 
 
+
     def signed_int(self, binary_string, bits):
         #二进制补码转换为有符号整数
         val = int(binary_string, 2)
@@ -451,7 +456,7 @@ class Simulator16Bit:
 class App:
     def __init__(self, root):
         self.root = root
-        self.root.title("16-bit ISA Simulator")
+        self.root.title("自定义ISA的16位RISC单周期CPU")
         self.simulator = Simulator16Bit()
 
         # 主框架
@@ -468,7 +473,7 @@ class App:
 
 
         # Code Input Area
-        ttk.Label(left_pane, text="Assembly Code:").grid(row=0, column=0, sticky=tk.W, pady=(0,5))
+        ttk.Label(left_pane, text="汇编代码:").grid(row=0, column=0, sticky=tk.W, pady=(0,5))
         self.code_text = scrolledtext.ScrolledText(left_pane, width=60, height=20, wrap=tk.WORD, undo=True)
         self.code_text.grid(row=1, column=0, columnspan=3, sticky=(tk.W, tk.E, tk.N, tk.S))
 
@@ -476,23 +481,23 @@ class App:
         controls_frame = ttk.Frame(left_pane)
         controls_frame.grid(row=2, column=0, columnspan=3, sticky=tk.W + tk.E, pady=5)
 
-        self.load_btn = ttk.Button(controls_frame, text="Load File", command=self.load_file)
+        self.load_btn = ttk.Button(controls_frame, text="导入文件", command=self.load_file)
         self.load_btn.pack(side=tk.LEFT, padx=2)
 
-        self.assemble_btn = ttk.Button(controls_frame, text="Assemble", command=self.assemble_code)
+        self.assemble_btn = ttk.Button(controls_frame, text="汇编", command=self.assemble_code)
         self.assemble_btn.pack(side=tk.LEFT, padx=2)
 
-        self.step_btn = ttk.Button(controls_frame, text="Step", command=self.step_code, state=tk.DISABLED)
+        self.step_btn = ttk.Button(controls_frame, text="单步", command=self.step_code, state=tk.DISABLED)
         self.step_btn.pack(side=tk.LEFT, padx=2)
 
-        self.run_btn = ttk.Button(controls_frame, text="Run", command=self.run_code, state=tk.DISABLED)
+        self.run_btn = ttk.Button(controls_frame, text="执行", command=self.run_code, state=tk.DISABLED)
         self.run_btn.pack(side=tk.LEFT, padx=2)
 
-        self.reset_btn = ttk.Button(controls_frame, text="Reset Sim", command=self.reset_simulator, state=tk.DISABLED)
+        self.reset_btn = ttk.Button(controls_frame, text="重置", command=self.reset_simulator, state=tk.DISABLED)
         self.reset_btn.pack(side=tk.LEFT, padx=2)
 
         # Status Bar (simple label for messages)
-        self.status_label = ttk.Label(left_pane, text="Status: Ready", relief=tk.SUNKEN, anchor=tk.W)
+        self.status_label = ttk.Label(left_pane, text="已就绪", relief=tk.SUNKEN, anchor=tk.W)
         self.status_label.grid(row=3, column=0, columnspan=3, sticky=(tk.W, tk.E), pady=(5,0))
 
 
@@ -501,13 +506,13 @@ class App:
         right_pane.grid(row=0, column=1, sticky=(tk.W, tk.E, tk.N, tk.S), padx=5, pady=5)
         right_pane.columnconfigure(0, weight=1)
 
-        ttk.Label(right_pane, text="Registers:").grid(row=0, column=0, sticky=tk.W)
+        ttk.Label(right_pane, text="寄存器:").grid(row=0, column=0, sticky=tk.W)
         self.reg_labels = {}
         reg_frame = ttk.Frame(right_pane)
         reg_frame.grid(row=1, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
 
         for i in range(16):
-            reg_name = pse.reg_num_to_name.get(i, f'r{i}')
+            reg_name = f'r{i}'
             ttk.Label(reg_frame, text=f"{reg_name:>3}:").grid(row=i, column=0, sticky=tk.W, padx=2)
             self.reg_labels[i] = ttk.Label(reg_frame, text="0 (0x0000)", width=15, relief=tk.GROOVE)
             self.reg_labels[i].grid(row=i, column=1, sticky=tk.W, padx=2)
@@ -518,7 +523,7 @@ class App:
         self.pc_label_val.grid(row=16, column=1, sticky=tk.W, padx=2, pady=(5,0))
 
         # Memory View (placeholder)
-        ttk.Label(right_pane, text="Memory View (first 16 words):").grid(row=2, column=0, sticky=tk.W, pady=(10,0))
+        ttk.Label(right_pane, text="内存区 :").grid(row=2, column=0, sticky=tk.W, pady=(10,0))
         self.mem_labels = []
         mem_frame = ttk.Frame(right_pane)
         mem_frame.grid(row=3, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
@@ -572,7 +577,7 @@ class App:
 
     def load_file(self):
         filepath = filedialog.askopenfilename(
-            title="Open Assembly File",
+            title="打开文件",
             filetypes=(("Assembly files", "*.asm *.s *.txt"), ("All files", "*.*"))
         )
         if filepath:
@@ -580,12 +585,12 @@ class App:
                 with open(filepath, 'r', encoding='utf-8') as f:
                     self.code_text.delete('1.0', tk.END)
                     self.code_text.insert('1.0', f.read())
-                self.status_label.config(text=f"Loaded: {filepath}")
+                self.status_label.config(text=f"已加载: {filepath}")
             except Exception as e:
-                self.status_label.config(text=f"Error loading file: {e}")
+                self.status_label.config(text=f"加载文件错误: {e}")
 
     def assemble_code(self):
-        self.status_label.config(text="Assembling...")
+        self.status_label.config(text="正在汇编")
         self.root.update_idletasks() # Refresh UI to show "Assembling..."
 
         asm_code = self.code_text.get('1.0', tk.END)
@@ -594,34 +599,34 @@ class App:
         success, message = self.simulator.load_program_from_source(asm_lines)
 
         if success:
-            self.status_label.config(text="Assembly successful. Ready to run/step.")
+            self.status_label.config(text="汇编成功， 等待执行")
             self.simulator.halted = False # Ready to run
         else:
-            self.status_label.config(text=f"Assembly failed: {message}")
+            self.status_label.config(text=f"汇编失败: {message}")
             self.simulator.halted = True # Cannot run
 
         self.update_ui_state()
 
     def step_code(self):
         if self.simulator.step():
-            self.status_label.config(text=f"Stepped. PC = {self.simulator.pc}")
+            self.status_label.config(text=f"已单步执行. PC = {self.simulator.pc}")
         else:
-            self.status_label.config(text="Simulator halted.")
+            self.status_label.config(text="模拟器已停止")
         self.update_ui_state()
 
     def run_code(self):
-        self.status_label.config(text="Running...")
+        self.status_label.config(text="正在连续执行中...")
         self.root.update_idletasks()
         # For a responsive GUI during run, you might need to run the simulator
         # in a separate thread or use root.after to schedule steps.
         # For now, a simple blocking run with a max_steps.
         self.simulator.run_program(max_steps=10000) # Limit steps
-        self.status_label.config(text=f"Run complete. PC = {self.simulator.pc}. Halted: {self.simulator.halted}")
+        self.status_label.config(text=f"执行完毕. PC = {self.simulator.pc}. 停止: {self.simulator.halted}")
         self.update_ui_state()
 
     def reset_simulator(self):
         self.simulator.reset()
-        self.status_label.config(text="Simulator reset.")
+        self.status_label.config(text="模拟器已重置")
         self.update_ui_state()
 
 
