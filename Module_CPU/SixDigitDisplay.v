@@ -19,7 +19,7 @@ reg [15:0] clk_cnt;      // 时钟分频计数器
 reg [2:0] scan_cnt;      // 扫描计数器（0-5，对应DIG1-DIG6）
 reg [7:0] data_reg;      // 当前显示数据
 reg [7:0] data_store [5:0]; // 数据锁存寄存器（0-5对应DIG1-DIG6）
-
+integer i;
 
 // 时钟分频（50MHz→1kHz）
 always @(posedge clk or negedge rst_n) begin
@@ -30,8 +30,13 @@ always @(posedge clk or negedge rst_n) begin
 end
 
 // 数据锁存（防抖动）
-always @(posedge clk) begin
-    if(clk_cnt == CLK_DIV) begin  
+always @(posedge clk or negedge rst_n) begin
+    if(!rst_n) begin
+        for(i = 0; i < 6; i = i + 1) begin
+            data_store[i] <=  0;
+        end
+    end
+    else if(clk_cnt == CLK_DIV) begin  
         data_store[0] <= data0;  // DIG1
         data_store[1] <= data1;  // DIG2
         data_store[2] <= data2;  // DIG3

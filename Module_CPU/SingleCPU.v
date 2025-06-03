@@ -23,7 +23,7 @@
 module SingleCPU(
     input CLK,
     input RESET,    //cpu执行,低电平有效
-    input wait_transport,   //等待传输信号
+    input wait_transport,   //等待传输信号,低电平有效
     input uart_rx_pin,    // UART串行数据输入
 
     output  led1,     //led灯显示
@@ -89,12 +89,14 @@ module SingleCPU(
     wire [15:0] back_regiser;
 
     wire led4_from_DM;
+    // wire led3_from_DM;
 
     // 3. 拼接逻辑
     assign MachineCodeData = {uart_received_byte, temp_lsb_reg}; // MSB在高位，LSB在低位
 
     // 4. 根据状态控制LED4和CPU运行
     assign led4 = ((state_reg == S_LOAD_DONE) || (state_reg == S_RUNNING)) ? led4_from_DM : 1'b1;
+    // assign led3 = (state_reg == S_RUNNING)?  1'b1 : 1'b0;
     assign cpu_run_enable = (state_reg == S_RUNNING);
     assign cpu_rst = RESET || !((state_reg == S_LOAD_DONE) || (state_reg == S_RUNNING));
 
@@ -107,73 +109,71 @@ module SingleCPU(
         // ... 其他寄存器初始化
     end
 
-    always @(posedge CLK) begin
-        case (state_reg)
-            S_WAIT_COUNT: begin
-                if (uart_byte_valid) begin
-                    temp_lsb_reg <= uart_received_byte;
-                    state_reg <= S_WAIT_COUNT_MSB;
-                end
-            end
-            
-            S_WAIT_COUNT_MSB: begin
-                if (uart_byte_valid) begin
-                    expected_instr_count_reg <= MachineCodeData; // 拼接成16位计数值
-                    received_instr_count_reg <= 0;
-                    MachineCodeAddress <= 0;
-                    if (MachineCodeData == 0) begin
-                        state_reg <= S_LOAD_DONE;
-                    end else begin
-                        state_reg <= S_LOADING_INSTR_LSB;
-                    end
-                end
-            end
-
-            S_LOADING_INSTR_LSB: begin
-                if (uart_byte_valid) begin
-                    temp_lsb_reg <= uart_received_byte;
-                    state_reg <= S_LOADING_INSTR_MSB;
-                end
-            end
-
-            S_LOADING_INSTR_MSB: begin
-                if (uart_byte_valid) begin
-                    // 此时MachineCodeData是完整的16位指令，可以写入内存
-                    // instr_mem_write_enable 会在此状态且uart_byte_valid时为高
-                    
-                    received_instr_count_reg <= received_instr_count_reg + 1;
-                    MachineCodeAddress <= MachineCodeAddress + 1;
-
-                    if ((received_instr_count_reg + 1) == expected_instr_count_reg) begin
-                        state_reg <= S_LOAD_DONE;
-                    end else begin
-                        state_reg <= S_LOADING_INSTR_LSB; // 返回等待下一条指令的低字节
-                    end
-                end
-            end
-            
-            S_LOAD_DONE: begin
-                if (!RESET) begin
-                    state_reg <= S_RUNNING;
-                end
-            end
-            
-            S_RUNNING: begin
-                if (!RESET) begin
-                    // 保持运行，CPU核心会被复位
-
-                end
-                // else if(wait_transport)
-                //     state_reg <= S_WAIT_COUNT;
-            end
-            default: state_reg <= S_WAIT_COUNT;
-        endcase
-    end
-
-    always @(posedge CLK) begin
-        if(wait_transport)
+    always @(posedge CLK or negedge RESET) begin
+        if (!RESET) begin
+            state_reg <= S_RUNNING;
+        end
+        else if(wait_transport == 0)
             state_reg <= S_WAIT_COUNT;
+        else begin
+            case (state_reg)
+                S_WAIT_COUNT: begin
+                    if (uart_byte_valid) begin
+                        temp_lsb_reg <= uart_received_byte;
+                        state_reg <= S_WAIT_COUNT_MSB;
+                    end
+                end
+                
+                S_WAIT_COUNT_MSB: begin
+                    if (uart_byte_valid) begin
+                        expected_instr_count_reg <= MachineCodeData; // 拼接成16位计数值
+                        received_instr_count_reg <= 0;
+                        MachineCodeAddress <= 0;
+                        if (MachineCodeData == 0) begin
+                            state_reg <= S_LOAD_DONE;
+                        end else begin
+                            state_reg <= S_LOADING_INSTR_LSB;
+                        end
+                    end
+                end
+
+                S_LOADING_INSTR_LSB: begin
+                    if (uart_byte_valid) begin
+                        temp_lsb_reg <= uart_received_byte;
+                        state_reg <= S_LOADING_INSTR_MSB;
+                    end
+                end
+
+                S_LOADING_INSTR_MSB: begin
+                    if (uart_byte_valid) begin
+                        // 此时MachineCodeData是完整的16位指令，可以写入内存
+                        // instr_mem_write_enable 会在此状态且uart_byte_valid时为高
+                        
+                        received_instr_count_reg <= received_instr_count_reg + 1;
+                        MachineCodeAddress <= MachineCodeAddress + 1;
+
+                        if ((received_instr_count_reg + 1) == expected_instr_count_reg) begin
+                            state_reg <= S_LOAD_DONE;
+                        end else begin
+                            state_reg <= S_LOADING_INSTR_LSB; // 返回等待下一条指令的低字节
+                        end
+                    end
+                end
+                
+                S_LOAD_DONE: begin
+
+                end
+                
+                S_RUNNING: begin
+                    // else if(!wait_transport)
+                    //     state_reg <= S_WAIT_COUNT;
+                end
+                // default: state_reg <= S_WAIT_COUNT;
+            endcase
+        end
     end
+
+
 
     // 6. 指令存储器写使能逻辑
     // 只有在接收到一条指令的高字节时，才产生写使能脉冲

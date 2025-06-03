@@ -32,7 +32,7 @@ module RegisterFile(
     always @(posedge CLK or negedge RESET)
     begin
         if(!RESET) begin
-            for(i = 0; i < 16; i = i + 1) register[i] <= 0;
+            for(i = 0; i < 16; i = i + 1) register[i] <= 16'b0;
         end
         else begin
             // wreg为真，写入数据

@@ -68,11 +68,11 @@ def main():
         
         ser.write(count_lsb)
         print(f"  发送计数的低字节: {count_lsb.hex()}")      # hex()将字节、字符串等转化为十六进制字符串
-        time.sleep(0.2) # 字节间延时
+        # time.sleep(0.1) # 字节间延时
         
         ser.write(count_msb)
         print(f"  发送计数的高字节: {count_msb.hex()}")
-        time.sleep(0.2) # 给FPGA一点时间来处理计数值
+        # time.sleep(0.1) # 给FPGA一点时间来处理计数值
 
         # 2. 逐条发送机器指令 (每条指令拆分为两个字节)
         if num_instructions > 0:
@@ -88,11 +88,11 @@ def main():
 
                 ser.write(instr_lsb)
                 print(f"  发送指令的低字节: {instr_lsb.hex()}")
-                time.sleep(0.2) # 字节间延时
+                # time.sleep(0.1) # 字节间延时
 
                 ser.write(instr_msb)
                 print(f"  发送指令的高字节: {instr_msb.hex()}")
-                time.sleep(0.2) # 指令间延时
+                # time.sleep(0.1) # 指令间延时
 
     except Exception as e:
         print(f"通信过程中发生错误: {e}")

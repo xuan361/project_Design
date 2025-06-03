@@ -1,6 +1,6 @@
 # 时钟与复位约束
 # 50MHz系统时钟约束（对应核心板50MHz晶振）
-create_clock -name CLK -period 20.000 [get_ports CLK]
+# create_clock -name CLK -period 20.000 [get_ports CLK]
 set_property PACKAGE_PIN W19   [get_ports CLK]       ;# 核心板50MHz时钟输入
 set_property IOSTANDARD LVCMOS33 [get_ports CLK]
 
@@ -10,7 +10,7 @@ set_property IOSTANDARD LVCMOS33 [get_ports RESET]
 set_property PULLUP true        [get_ports RESET]    ;# 按键上拉配置
 
 # 暂停控制信号（预留扩展IO）
-set_property PACKAGE_PIN R16    [get_ports wait_transport]       ;# 扩展IO CN3_引脚29
+set_property PACKAGE_PIN Y18    [get_ports wait_transport]       ;# 扩展IO CN3_引脚29
 set_property IOSTANDARD LVCMOS33 [get_ports wait_transport]
 set_property PULLDOWN true      [get_ports wait_transport]       ;# 默认下拉防干扰
 
@@ -24,13 +24,13 @@ set_property PACKAGE_PIN H20   [get_ports {sel[4]}]  ;# DIG5 位选
 set_property PACKAGE_PIN H18   [get_ports {sel[5]}]  ;# DIG6 位选
 
 # 段选信号（共阳，低有效 a-g=seg[6:0]）
-set_property PACKAGE_PIN U22    [get_ports {seg[6]}]  ;# a段
-set_property PACKAGE_PIN P19    [get_ports {seg[5]}]  ;# b段
-set_property PACKAGE_PIN W21    [get_ports {seg[4]}]  ;# c段
+set_property PACKAGE_PIN AA20    [get_ports {seg[6]}]  ;# a段
+set_property PACKAGE_PIN W22    [get_ports {seg[5]}]  ;# b段
+set_property PACKAGE_PIN AB20    [get_ports {seg[4]}]  ;# c段
 set_property PACKAGE_PIN V22    [get_ports {seg[3]}]  ;# d段
-set_property PACKAGE_PIN AB20   [get_ports {seg[2]}]  ;# e段
-set_property PACKAGE_PIN W22    [get_ports {seg[1]}]  ;# f段
-set_property PACKAGE_PIN AA20   [get_ports {seg[0]}]  ;# g段
+set_property PACKAGE_PIN W21   [get_ports {seg[2]}]  ;# e段
+set_property PACKAGE_PIN P19    [get_ports {seg[1]}]  ;# f段
+set_property PACKAGE_PIN U22   [get_ports {seg[0]}]  ;# g段
 
 # 数码管公共配置
 set_property IOSTANDARD LVCMOS33 [get_ports {sel[*] seg[*]}]

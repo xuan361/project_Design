@@ -7,7 +7,7 @@ set_property IOSTANDARD LVCMOS33 [get_ports CLK]
 # 复位信号约束（对应底板复位按键）
 set_property PACKAGE_PIN Y19   [get_ports RESET]     ;# 底板机械复位按键
 set_property IOSTANDARD LVCMOS33 [get_ports RESET]
-set_property PULLUP true        [get_ports RESET]    ;# 按键上拉配置
+# set_property PULLUP true        [get_ports RESET]    ;# 按键上拉配置
 
 
 # 六位数码管约束
@@ -52,4 +52,4 @@ set_property PULLUP true        [get_ports uart_rx_pin]  ;# 串口默认上拉
 # 暂停控制信号（预留扩展IO）
 set_property PACKAGE_PIN R16    [get_ports wait_transport]       ;# 扩展IO CN3_引脚29
 set_property IOSTANDARD LVCMOS33 [get_ports wait_transport]
-set_property PULLDOWN true      [get_ports wait_transport]       ;# 默认下拉防干扰
+set_property PULLUP true      [get_ports wait_transport]       ;# 默认上拉防干扰
