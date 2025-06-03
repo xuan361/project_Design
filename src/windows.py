@@ -1,6 +1,7 @@
 import tkinter as tk
 from tkinter import filedialog, scrolledtext, ttk
 import re
+import time
 import pseudo as pse
 
 class Simulator16Bit:
@@ -166,6 +167,7 @@ class Simulator16Bit:
         # SB-type (beq,ble):     rs2(4) rs1(4) imm(4) opcode(4) -> instr[0:4] instr[4:8] instr[8:12] instr[12:16]
         # U-type (lui):          imm(8)        rd(4) opcode(4) -> instr[0:8] instr[8:12] instr[12:16]
         # UJ-type (jal):         imm(8)        rd(4) opcode(4) -> instr[0:8] instr[8:12] instr[12:16]
+
 
         opcode = instruction_word[-4:] # Last 4 bits are opcode in your assembler
         # print(f"  Opcode: {opcode}")
@@ -429,6 +431,9 @@ class Simulator16Bit:
 
     def run_program(self, max_steps=1000): # 添加 max_steps 防无限循环
         print("Running program...")
+
+        time.sleep(0.3) # 延迟0.3s
+
         steps = 0
         while not self.halted and steps < max_steps:
             if not self.step(): # 返回 False，如果步骤停止
@@ -441,6 +446,9 @@ class Simulator16Bit:
 
     def print_regs(self):
         print("--- Registers ---")
+
+        time.sleep(0.3)  # 延迟0.3s
+
         for i in range(0, 16, 4):
             row = []
             for j in range(4):
@@ -457,6 +465,9 @@ class App:
     def __init__(self, root):
         self.root = root
         self.root.title("自定义ISA的16位RISC单周期CPU")
+
+        # 这里似乎要定义字体
+
         self.simulator = Simulator16Bit()
 
         main_frame = ttk.Frame(root, padding="2")
@@ -464,11 +475,11 @@ class App:
         root.columnconfigure(0, weight=1)
         root.rowconfigure(0, weight=1)
 
-        # --- 代码编辑区和行号区 ---
+        #    代码编辑区和行号区
         # 创建一个框架来容纳行号和代码文本区
         code_area_frame = ttk.Frame(main_frame)
         code_area_frame.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S), padx=5, pady=(0, 5))
-        main_frame.columnconfigure(0, weight=3) # 给代码区分配更多权重
+        main_frame.columnconfigure(0, weight=3)
         main_frame.rowconfigure(0, weight=1)    # 让代码区可以垂直伸展
 
         code_area_frame.rowconfigure(1, weight=1) # 让包含行号和文本框的行可以伸展
@@ -502,16 +513,14 @@ class App:
 
         # 绑定事件用于同步行号和更新
         self.code_text.bind('<KeyRelease>', self.on_text_change)
-        self.code_text.bind('<MouseWheel>', self._on_mousewheel_scroll) # For Windows/ некоторых Linux
-        self.code_text.bind('<Button-4>', self._on_mousewheel_scroll)   # For Linux scroll up
-        self.code_text.bind('<Button-5>', self._on_mousewheel_scroll)   # For Linux scroll down
+        self.code_text.bind('<MouseWheel>', self._on_mousewheel_scroll)
+        self.code_text.bind('<Button-4>', self._on_mousewheel_scroll)
+        self.code_text.bind('<Button-5>', self._on_mousewheel_scroll)
         # 当文本框内容改变时（例如撤销/重做/粘贴），也需要更新行号
         self.code_text.bind("<<Modified>>", self.on_text_modified)
 
-        # --- 控制按钮和状态栏 (这部分移到 code_area_frame 或 left_pane 下，取决于整体布局) ---
-        # 为了简化，我们假设 left_pane 就是 code_area_frame 上方的区域或其自身
-        # 如果 left_pane 是 main_frame 的一部分，你需要调整 grid 的 row/column
-        # 这里我们把按钮放在 code_area_frame 下方
+        # 控制按钮和状态栏
+        # 按钮放在 code_area_frame 下方
 
         controls_frame = ttk.Frame(code_area_frame) # 将按钮放在代码区下方
         controls_frame.grid(row=3, column=0, columnspan=3, sticky=tk.W + tk.E, pady=5)
@@ -520,7 +529,7 @@ class App:
         self.load_btn.pack(side=tk.LEFT, padx=2)
         self.assemble_btn = ttk.Button(controls_frame, text="汇编", command=self.assemble_code)
         self.assemble_btn.pack(side=tk.LEFT, padx=2)
-        # ... (其他按钮也 pack 到 controls_frame) ...
+        # (其他按钮也 pack 到 controls_frame)
         self.step_btn = ttk.Button(controls_frame, text="单步", command=self.step_code, state=tk.DISABLED)
         self.step_btn.pack(side=tk.LEFT, padx=2)
         self.run_btn = ttk.Button(controls_frame, text="执行", command=self.run_code, state=tk.DISABLED)
@@ -531,11 +540,11 @@ class App:
         self.status_label = ttk.Label(code_area_frame, text="已就绪", relief=tk.SUNKEN, anchor=tk.W)
         self.status_label.grid(row=4, column=0, columnspan=3, sticky=(tk.W, tk.E), pady=(5,0))
 
-        # --- 右侧面板：寄存器和内存视图 ---
+        # 右侧面板：寄存器和内存视图
         right_pane = ttk.Frame(main_frame, padding="0")
         right_pane.grid(row=0, column=1, sticky=(tk.W, tk.E, tk.N, tk.S), padx=5, pady=5)
         main_frame.columnconfigure(1, weight=1) # 给右侧面板分配权重
-        # ... (右侧面板的寄存器和内存视图代码保持不变，确保它们 grid 到 right_pane) ...
+
         ttk.Label(right_pane, text="寄存器:").grid(row=0, column=0, sticky=tk.W)
         self.reg_labels = {}
         reg_frame = ttk.Frame(right_pane)
@@ -566,36 +575,35 @@ class App:
         self.update_line_numbers() # 初始加载行号
 
     def _on_text_scroll(self, *args):
-        """当代码编辑区滚动时，用于更新滚动条位置，并同步行号区滚动。"""
+        # 代码编辑区滚动时，用于更新滚动条位置，并同步行号区滚动
         self.v_scrollbar.set(*args) # 更新滚动条
         self.line_numbers_text.yview_moveto(args[0]) # 同步行号区的垂直视图
 
     def _on_scrollbar_yview(self, *args):
-        """当滚动条被拖动时，同时滚动代码编辑区和行号区。"""
+        # 滚动条被拖动时，同时滚动代码编辑区和行号区
         self.code_text.yview(*args)
         self.line_numbers_text.yview(*args)
 
     def _on_mousewheel_scroll(self, event):
-        """处理代码编辑区的鼠标滚轮事件，并同步行号区。"""
-        # 对于Windows和一些Linux系统，event.delta通常是120的倍数
-        # 对于Linux的Button-4/5，event.num是4或5
-        if event.num == 4: # Scroll up on Linux
+        # 处理代码编辑区的鼠标滚轮事件，并同步行号区
+        # 对于Windows, event.delta通常是120的倍数
+        if event.num == 4:
             self.code_text.yview_scroll(-1, "units")
             self.line_numbers_text.yview_scroll(-1, "units")
-        elif event.num == 5: # Scroll down on Linux
+        elif event.num == 5:
             self.code_text.yview_scroll(1, "units")
             self.line_numbers_text.yview_scroll(1, "units")
-        elif hasattr(event, 'delta') and event.delta != 0: # For Windows
+        elif hasattr(event, 'delta') and event.delta != 0:
             scroll_amount = -1 if event.delta > 0 else 1
             self.code_text.yview_scroll(scroll_amount, "units")
             self.line_numbers_text.yview_scroll(scroll_amount, "units")
         return "break" # 阻止事件进一步传播导致可能的双重滚动
 
     def on_text_modified(self, event=None):
-        """当文本框内容被修改时（例如，undo/redo/paste），安排行号更新。"""
-        # <<Modified>> 事件会在每次修改后触发，我们需要一个标志来避免不必要的重复更新
+        # 当文本框内容被修改时（例如，undo/redo/paste），安排行号更新
+        # <<Modified>> 事件会在每次修改后触发，需要一个标志来避免不必要的重复更新
         # Text widget的 <<Modified>> 会在每次修改后将自身的 "modified" 标志设为 True
-        # 我们可以检查这个标志，并在更新行号后将其重设为 False
+        # 检查这个标志，并在更新行号后将其重设为 False
         if self.code_text.edit_modified():
             if self._line_number_update_job:
                 self.root.after_cancel(self._line_number_update_job)
@@ -603,7 +611,7 @@ class App:
             self.code_text.edit_modified(False) # 重置修改标志
 
     def on_text_change(self, event=None):
-        """按键释放时，安排行号更新 (也用于将来的语法高亮)。"""
+        # 按键释放时，安排行号更新 (也用于语法高亮)
         if self._line_number_update_job:
             self.root.after_cancel(self._line_number_update_job)
         # 使用较短延迟或在 on_text_modified 中处理更佳
@@ -611,7 +619,7 @@ class App:
 
 
     def update_line_numbers(self, event=None):
-        """更新行号区域的显示。"""
+        # 更新行号区域的显示
         self.line_numbers_text.config(state='normal') # 允许修改
         self.line_numbers_text.delete('1.0', 'end')   # 清空旧行号
 
@@ -652,7 +660,7 @@ class App:
 
 
     def _scroll_sync_y(self, event=None):
-        """确保行号区的垂直滚动与代码区一致。"""
+        # 确保行号区的垂直滚动与代码区一致
         # 当代码区通过键盘、API等方式滚动时，其yscrollcommand会触发 _on_text_scroll
         # _on_text_scroll 已经负责了大部分同步。此函数可用于在其他情况下强制同步。
         top_fraction, _ = self.code_text.yview()
@@ -671,17 +679,15 @@ class App:
                     self.code_text.insert('1.0', f.read())
                 self.code_text.edit_modified(False) # 重置修改标志
                 self.status_label.config(text=f"已加载: {filepath}")
-                self.update_line_numbers() # <--- 加载文件后更新行号
+                self.update_line_numbers()  # 加载文件后更新行号
                 # self.apply_syntax_highlighting() # 如果之后添加语法高亮
             except Exception as e:
                 self.status_label.config(text=f"加载文件错误: {e}")
 
-    # ... (assemble_code, update_ui_state, step_code, run_code, reset_simulator 方法保持不变) ...
-    # 但需要确保它们不会干扰行号的更新和同步逻辑，通常不会。
     def assemble_code(self):
         self.status_label.config(text="正在汇编...")
         self.root.update_idletasks()
-        self.update_line_numbers() # 汇编前确保行号最新 (可选)
+        self.update_line_numbers() # 汇编前确保行号最新
         asm_code = self.code_text.get('1.0', tk.END)
         asm_lines = asm_code.splitlines()
         success, message = self.simulator.load_program_from_source(asm_lines)
@@ -693,7 +699,7 @@ class App:
             self.simulator.halted = True
         self.update_ui_state()
 
-    def update_ui_state(self): # 确保这个方法被正确调用
+    def update_ui_state(self):
         for i in range(16):
             val = self.simulator.get_reg_value(i)
             self.reg_labels[i].config(text=f"{val} (0x{val:04X})")
