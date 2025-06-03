@@ -1,3 +1,8 @@
+**保持main分支，与发行版Releases一致，
+dev应该是最新进展的最新开发记录
+为实现可视化窗口，另开windows分支作为最新进展**
+
+
 ```
 pseudo.py从program.txt中读取汇编语言并进行汇编，再输入到machine_code_output.txt
 ```
