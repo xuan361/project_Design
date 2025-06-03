@@ -55,7 +55,7 @@ always @(posedge clk or negedge rst_n) begin
 end
 
 
-always @(*) begin
+always @(posedge clk) begin
     case(scan_cnt)  // 扫描6个数码管位
         //DIG1（data0）
         3'd0: begin  

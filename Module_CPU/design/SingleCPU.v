@@ -88,14 +88,20 @@ module SingleCPU(
     wire [15:0] instruction;
     wire [15:0] back_regiser;
 
+    wire led1_from_DM;
+    wire led2_from_DM;
+    wire led3_from_DM;
     wire led4_from_DM;
-    // wire led3_from_DM;
 
     // 3. 拼接逻辑
     assign MachineCodeData = {uart_received_byte, temp_lsb_reg}; // MSB在高位，LSB在低位
 
     // 4. 根据状态控制LED4和CPU运行
+    assign led1 = ((state_reg == S_LOAD_DONE) || (state_reg == S_RUNNING)) ? led1_from_DM : 1'b0;
+    assign led2 = ((state_reg == S_LOAD_DONE) || (state_reg == S_RUNNING)) ? led2_from_DM : 1'b0;
+    assign led3 = ((state_reg == S_LOAD_DONE) || (state_reg == S_RUNNING)) ? led3_from_DM : 1'b0;
     assign led4 = ((state_reg == S_LOAD_DONE) || (state_reg == S_RUNNING)) ? led4_from_DM : 1'b1;
+
     // assign led3 = (state_reg == S_RUNNING)?  1'b1 : 1'b0;
     assign cpu_run_enable = (state_reg == S_RUNNING);
     assign cpu_rst = RESET || !((state_reg == S_LOAD_DONE) || (state_reg == S_RUNNING));
@@ -212,7 +218,7 @@ module SingleCPU(
     ALU alu(ALUOp, ReadData1, B,  result, zero);
 
     // DataMemory：用于内存存储，内存读写
-    DataMemory DM(CLK, RESET, wmem && cpu_run_enable, result, ReadData2, memc ,DataFromROM, DataOut, led1, led2, led3, led4_from_DM, ROMDataAddress, seg, sel);
+    DataMemory DM(CLK, RESET, wmem && cpu_run_enable, result, ReadData2, memc ,DataFromROM, DataOut, led1_from_DM, led2_from_DM, led3_from_DM, led4_from_DM, ROMDataAddress, seg, sel);
 
     assign currentAddress_2 = currentAddress + 2;
     assign currentAddress_immediate = currentAddress + immExt;

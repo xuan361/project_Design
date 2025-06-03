@@ -422,7 +422,7 @@ def assemble_program(lines):
 if __name__ == '__main__':
     # 注意！！从 program.txt 文件读取汇编指令，若文件命名不同则及时更改
     try:
-        with open('program.txt', 'r', encoding='utf-8') as f:
+        with open('program2.txt', 'r', encoding='utf-8') as f:
             lines = f.readlines()
     except FileNotFoundError:
         print("Error: program.txt not found. Please ensure the file exists in the same directory.")
@@ -488,7 +488,7 @@ if __name__ == '__main__':
         print(line)
 
     # 输出机器码到文件 machine_code_output.txt
-    output_filename = 'machine_code_output.txt'
+    output_filename = 'D:/learn/Git/testgit/Module_CPU/transport/machineCode.txt'
     with open(output_filename, 'w', encoding='utf-8') as f:
         for line in final_output_lines:
             f.write(line + '\n')

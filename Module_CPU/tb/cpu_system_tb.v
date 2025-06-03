@@ -84,20 +84,21 @@ module cpu_system_tb();
         // 1. 初始化
         CLK = 0;
         RESET = 1;
-        wait_transport = 0;
+        wait_transport = 1;
         uart_rx_pin = 1'b0; // UART idle high
         num_instructions_read = 0;
 
-        #20; RESET <= 1'b0;
-        #20; RESET <= 1'b1;
+        #20; RESET <= 1'b0; 
+        #20; RESET <= 1'b1; 
+        #20; wait_transport <= 1'b0; 
+        #20; wait_transport <= 1'b1; 
 
         $display("SIMULATION START: Initializing...");
         #(CLK_PERIOD * 50);
 
- 
         // 2. 从文件读取指令到Testbench内存
 
-        file_handle = $fopen("D:/learn/Git/testgit/Module_CPU/machineCode.txt", "r");
+        file_handle = $fopen("D:/learn/Git/testgit/Module_CPU/transport/machineCode.txt", "r");
         if (file_handle == 0) begin
             $display("TB ERROR:The 'machineCode.txt' file cannot be opened. Please confirm that the file exists and each line contains a 16-bit binary number.");
             $finish;

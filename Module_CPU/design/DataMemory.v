@@ -40,23 +40,17 @@ module DataMemory(
 
     assign RAM_address_standard = (RAMaddress >> 1) << 1;
 
-    // 数码管对应输入数据
-    always @(*) begin
-        digit[0] = RAM[0];
-        digit[1] = RAM[1];
-        digit[2] = RAM[2];
-        digit[3] = RAM[3];
-        digit[4] = RAM[4];
-        digit[5] = RAM[5];
-    end
 
     // 初始化内存
     integer i;
     initial 
     begin
         for(i = 0; i < 64; i = i + 1) RAM[i] = 8'b0;
+        for(i = 0; i < 6; i = i + 1) digit[i] = RAM[i];
         led1 <= 1'b0;    led2 <= 1'b0;    led3 <= 1'b0; led4 <= 1'b0;
     end
+
+    
 
     //  读写内存
     always @(posedge CLK or negedge RESET)
@@ -90,6 +84,22 @@ module DataMemory(
                     end
             end
         end
+    end
+
+    // 数码管对应输入数据
+    always @(posedge CLK) begin
+        digit[0] = RAM[0];
+        digit[1] = RAM[1];
+        digit[2] = RAM[2];
+        digit[3] = RAM[3];
+        digit[4] = RAM[4];
+        digit[5] = RAM[5];
+        // digit[0] = 8'd13;
+        // digit[1] = 8'd12;
+        // digit[2] = 8'd7;
+        // digit[3] = 8'd12;
+        // digit[4] = 8'd9;
+        // digit[5] = 8'd11;
     end
     
     // 读取内存(内存到寄存器)
