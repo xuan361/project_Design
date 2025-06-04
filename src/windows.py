@@ -599,31 +599,45 @@ class App:
         self._highlight_job = None
 
         # 右侧面板：寄存器和内存视图
-        right_pane = ttk.Frame(main_frame, padding="0")
-        right_pane.grid(row=0, column=1, sticky=(tk.W, tk.E, tk.N, tk.S), padx=5, pady=5)
-        main_frame.columnconfigure(1, weight=1) # 给右侧面板分配权重
+        right_pane = ttk.Frame(main_frame, padding=(5, 0, 5, 5))
+        right_pane.grid(row=0, column=1, sticky=(tk.W, tk.E, tk.N, tk.S), padx=5, pady=(0, 5))
+        main_frame.columnconfigure(1, weight=1) # 给 right_pane 在 main_frame 中的列分配权重
 
-        ttk.Label(right_pane, text="寄存器:").grid(row=0, column=0, sticky=tk.W)
+        # 配置 right_pane 使其内部可以有两列平均分配空间 (或者按需调整权重)
+        right_pane.columnconfigure(0, weight=1) # 第0列用于寄存器
+        right_pane.columnconfigure(1, weight=1) # 第1列用于内存
+        # right_pane 的行配置，第0行放标题，第1行放具体内容并允许扩展
+        right_pane.rowconfigure(0, weight=0)
+        right_pane.rowconfigure(1, weight=1) # 让包含 reg_frame 和 mem_frame 的行可以垂直伸展
+
+        ttk.Label(right_pane, text="寄存器:").grid(row=0, column=0,sticky=tk.NW, padx=(0,5), pady=(0,2))
+        self.reg_frame = ttk.Frame(right_pane) # 父组件是 right_pane
+        self.reg_frame.grid(row=1, column=0, sticky='nsew', padx=(0,5)) # 占据第1行，第0列
+        # padx=(0,5) 在右边留一点间距
         self.reg_labels = {}
-        reg_frame = ttk.Frame(right_pane)
-        reg_frame.grid(row=1, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
         for i in range(16):
             reg_name_display = f'r{i}'
-            ttk.Label(reg_frame, text=f"{reg_name_display:>3}:").grid(row=i, column=0, sticky=tk.W, padx=2, pady=1)
-            self.reg_labels[i] = ttk.Label(reg_frame, text="0 (0x0000)", font=("Arial", 12),width=18, relief=tk.GROOVE, anchor=tk.W)
+            ttk.Label(self.reg_frame, text=f"{reg_name_display:>3}:").grid(row=i, column=0, sticky=tk.W, padx=2, pady=1)
+            self.reg_labels[i] = ttk.Label(self.reg_frame, text="0 (0x0000)", width=18, relief=tk.GROOVE, anchor=tk.W)
             self.reg_labels[i].grid(row=i, column=1, sticky=tk.W, padx=2, pady=1)
-        self.pc_label_title = ttk.Label(reg_frame, text="PC:")
+
+        self.pc_label_title = ttk.Label(self.reg_frame, text="PC:")
         self.pc_label_title.grid(row=16, column=0, sticky=tk.W, padx=2, pady=(5,1))
-        self.pc_label_val = ttk.Label(reg_frame, text="0 (0x0000)", font=("Arial", 12),width=18, relief=tk.GROOVE, anchor=tk.W)
+        self.pc_label_val = ttk.Label(self.reg_frame, text="0 (0x0000)", width=18, relief=tk.GROOVE, anchor=tk.W)
         self.pc_label_val.grid(row=16, column=1, sticky=tk.W, padx=2, pady=(5,1))
-        ttk.Label(right_pane, text="内存视图 (前16字):").grid(row=2, column=0, sticky=tk.W, pady=(10,0))
+
+        ttk.Label(right_pane, text="内存视图 (前16字):").grid(row=0, column=1, sticky=tk.NW, padx=(5,0), pady=(0,2)) # padx=(5,0) 在左边留一点间距
+
+        self.mem_frame = ttk.Frame(right_pane) # 父组件是 right_pane
+        self.mem_frame.grid(row=1, column=1, sticky='nsew', padx=(5,0)) # 占据第1行，第1列
+
         self.mem_labels = []
         mem_frame = ttk.Frame(right_pane)
         mem_frame.grid(row=3, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
         for i in range(16):
-            addr_label = ttk.Label(mem_frame, text=f"0x{i:03X}:")
+            addr_label = ttk.Label(self.mem_frame, text=f"0x{i:03X}:", style='Addr.TLabel')
             addr_label.grid(row=i, column=0, sticky=tk.W, padx=2, pady=1)
-            val_label = ttk.Label(mem_frame, text="0000_0000_0000_0000", font=("Arial", 12), relief=tk.GROOVE, anchor=tk.W)
+            val_label = ttk.Label(self.mem_frame, text="0000_0000_0000_0000", style='Memory.TLabel', relief=tk.GROOVE, anchor=tk.W)
             val_label.grid(row=i, column=1, sticky=tk.W, padx=2, pady=1)
             self.mem_labels.append(val_label)
 
