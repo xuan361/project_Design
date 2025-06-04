@@ -626,20 +626,35 @@ class App:
         self.pc_label_val = ttk.Label(self.reg_frame, text="0 (0x0000)", width=18, relief=tk.GROOVE, anchor=tk.W)
         self.pc_label_val.grid(row=16, column=1, sticky=tk.W, padx=2, pady=(5,1))
 
-        ttk.Label(right_pane, text="内存视图 (前16字):").grid(row=0, column=1, sticky=tk.NW, padx=(5,0), pady=(0,2)) # padx=(5,0) 在左边留一点间距
+        ttk.Label(right_pane, text="内存视图:").grid(row=0, column=1, sticky=tk.NW, padx=(5,0), pady=(0,2)) # padx=(5,0) 在左边留一点间距
 
         self.mem_frame = ttk.Frame(right_pane) # 父组件是 right_pane
         self.mem_frame.grid(row=1, column=1, sticky='nsew', padx=(5,0)) # 占据第1行，第1列
 
-        self.mem_labels = []
-        mem_frame = ttk.Frame(right_pane)
-        mem_frame.grid(row=3, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
-        for i in range(16):
-            addr_label = ttk.Label(self.mem_frame, text=f"0x{i:03X}:", style='Addr.TLabel')
-            addr_label.grid(row=i, column=0, sticky=tk.W, padx=2, pady=1)
-            val_label = ttk.Label(self.mem_frame, text="0000_0000_0000_0000", style='Memory.TLabel', relief=tk.GROOVE, anchor=tk.W)
-            val_label.grid(row=i, column=1, sticky=tk.W, padx=2, pady=1)
-            self.mem_labels.append(val_label)
+        # 让 mem_frame 内部的文本区可以扩展
+        self.mem_frame.rowconfigure(0, weight=1)
+        self.mem_frame.columnconfigure(0, weight=1)
+
+        # 新增：内存显示文本区 (tk.Text)
+        self.memory_display_text = tk.Text(self.mem_frame, wrap='none', undo=False, # undo通常对显示区不需要
+                                           font=self.memory_value_font, # 使用之前定义的等宽字体
+                                           width=25) # 初始宽度，可以调整
+        self.memory_display_text.grid(row=0, column=0, sticky='nsew')
+
+        # 新增：内存显示区的垂直滚动条
+        mem_v_scrollbar = ttk.Scrollbar(self.mem_frame, orient="vertical", command=self.memory_display_text.yview)
+        mem_v_scrollbar.grid(row=0, column=1, sticky='ns')
+        self.memory_display_text.config(yscrollcommand=mem_v_scrollbar.set)
+
+        # self.mem_labels = []
+        # mem_frame = ttk.Frame(right_pane)
+        # mem_frame.grid(row=3, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
+        # for i in range(16):
+        #     addr_label = ttk.Label(self.mem_frame, text=f"0x{i:03X}:", style='Addr.TLabel')
+        #     addr_label.grid(row=i, column=0, sticky=tk.W, padx=2, pady=1)
+        #     val_label = ttk.Label(self.mem_frame, text="0000_0000_0000_0000", style='Memory.TLabel', relief=tk.GROOVE, anchor=tk.W)
+        #     val_label.grid(row=i, column=1, sticky=tk.W, padx=2, pady=1)
+        #     self.mem_labels.append(val_label)
 
 
         self._line_number_update_job = None # 用于延迟更新行号
@@ -647,6 +662,38 @@ class App:
         self.update_line_numbers() # 初始加载行号
 
         self._highlight_job = None # 用于延迟高亮
+
+        if hasattr(self, 'code_text'):
+            self.code_text.tag_configure('current_execution_line_tag', background='yellow')
+        self.current_highlighted_tk_line = None
+
+        # 确保语法高亮模式定义
+        if hasattr(pse, 'opcode_map') and hasattr(pse, 'register_alias'):
+            self.opcodes = list(pse.opcode_map.keys())
+            self.pseudo_opcodes = ['li', 'la', 'j', 'bge']
+            instructions_pattern = r"\b(" + "|".join(self.opcodes) + r")\b"
+            pseudo_instructions_pattern = r"\b(" + "|".join(self.pseudo_opcodes) + r")\b"
+            register_names = list(pse.register_alias.keys())
+            _generic_regs_pattern_str = r"\b(r(?:[0-9]|1[0-5]))\b"
+            core_generic_part = _generic_regs_pattern_str[2:-2]
+            sorted_reg_names = sorted(register_names, key=len, reverse=True)
+            all_registers_pattern = r"\b(" + "|".join(sorted_reg_names) + r"|" + core_generic_part + r")\b"
+            self.highlight_patterns = {
+                'comment_tag': r"(#|//|///)[^\n]*",
+                'instruction_tag': instructions_pattern,
+                'pseudo_instruction_tag': pseudo_instructions_pattern,
+                'register_tag': all_registers_pattern,
+            }
+            self.highlight_order = [
+                'comment_tag', 'instruction_tag', 'pseudo_instruction_tag', 'register_tag'
+            ]
+        else:
+            self.highlight_patterns = {}; self.highlight_order = []
+
+        self.update_ui_state()
+        self.update_line_numbers()
+        if hasattr(self, 'apply_syntax_highlighting'):
+            self.apply_syntax_highlighting()
 
         # --- 语法高亮：定义正则表达式 ---
         self.opcodes = list(pse.opcode_map.keys()) # 真实指令
@@ -901,32 +948,66 @@ class App:
         self.line_numbers_text.yview_moveto(top_fraction)
         # 滚动条的位置也应该被正确设置，这由 _on_text_scroll -> self.v_scrollbar.set() 完成
 
+    def _update_memory_view(self):
+        """更新内存视图文本区域的内容。"""
+        if not hasattr(self, 'memory_display_text') or not self.memory_display_text.winfo_exists():
+            return
+
+        self.memory_display_text.config(state='normal') # 允许修改
+        self.memory_display_text.delete('1.0', 'end')   # 清空旧内容
+
+        # 遍历模拟器的内存 (self.simulator.memory 存储的是纯二进制 "XXXXXXXXXXXXXXXX")
+        # 假设地址是16进制4位数，例如 0000, 0001, ..., 01FF (对于512字内存)
+        # 你可以根据实际内存大小调整地址格式 f"0x{addr:03X}" 或 f"0x{addr:04X}"
+        addr_width = 4 if len(self.simulator.memory) > 0xFFF else 3 # 简单判断地址宽度
+
+        for addr, word_binary in enumerate(self.simulator.memory):
+            if len(word_binary) == 16: # 确保是16位二进制
+                formatted_word = '_'.join([word_binary[j:j+4] for j in range(0, 16, 4)])
+            else: # 异常数据处理
+                formatted_word = word_binary # 直接显示原始数据
+
+            # 可以选择显示十六进制值：
+            # try:
+            #    hex_val = f"{int(word_binary, 2):04X}"
+            #    display_val = hex_val
+            # except ValueError:
+            #    display_val = "ERR_FORMAT"
+            # line = f"0x{addr:0{addr_width}X}: {display_val}\n"
+
+            line = f"0x{addr:0{addr_width}X}: {formatted_word}\n"
+            self.memory_display_text.insert('end', line)
+
+        self.memory_display_text.config(state='disabled') # 禁止编辑
+
     def update_ui_state(self):
         for i in range(16):
             val = self.simulator.get_reg_value(i)
             self.reg_labels[i].config(text=f"{val} (0x{val:04X})")
         pc_val = self.simulator.pc
         self.pc_label_val.config(text=f"{pc_val} (0x{pc_val:04X})")
-        for i in range(min(16, len(self.simulator.memory))):
-            mem_word_bin = self.simulator.memory[i]
-            if len(mem_word_bin) == 16:
-                formatted_mem_word = '_'.join([mem_word_bin[j:j+4] for j in range(0, 16, 4)])
-                self.mem_labels[i].config(text=formatted_mem_word)
-            else:
-                self.mem_labels[i].config(text=mem_word_bin)
+
+        # for i in range(min(16, len(self.simulator.memory))):
+        #     mem_word_bin = self.simulator.memory[i]
+        #     if len(mem_word_bin) == 16:
+        #         formatted_mem_word = '_'.join([mem_word_bin[j:j+4] for j in range(0, 16, 4)])
+        #         self.mem_labels[i].config(text=formatted_mem_word)
+        #     else:
+        #         self.mem_labels[i].config(text=mem_word_bin)
+
+        # 调用新的内存视图更新方法，而不是更新旧的 self.mem_labels
+        self._update_memory_view()
+
         if self.simulator.halted or not self.simulator.machine_code:
-            self.step_btn.config(state=tk.DISABLED)
-            self.run_btn.config(state=tk.DISABLED)
+            self.step_btn.config(state=tk.DISABLED); self.run_btn.config(state=tk.DISABLED)
         else:
-            self.step_btn.config(state=tk.NORMAL)
-            self.run_btn.config(state=tk.NORMAL)
-        if self.simulator.machine_code:
-            self.reset_btn.config(state=tk.NORMAL)
-        else:
-            self.reset_btn.config(state=tk.DISABLED)
+            self.step_btn.config(state=tk.NORMAL); self.run_btn.config(state=tk.NORMAL)
+        if self.simulator.machine_code: self.reset_btn.config(state=tk.NORMAL)
+        else: self.reset_btn.config(state=tk.DISABLED)
         # 确保行号区的滚动位置在UI更新时也可能需要同步
         self._scroll_sync_y()
-        self._update_current_line_highlight() # 调用高亮更新
+        if hasattr(self, '_update_current_line_highlight'): # 当前行高亮
+            self._update_current_line_highlight()
 
     def step_code(self):
         if self.simulator.step():
