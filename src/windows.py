@@ -500,6 +500,10 @@ class App:
 
         self.simulator = Simulator16Bit()
 
+
+        self.is_running_continuously = False # 追踪是否处于连续执行状态
+        self._continuous_run_job = None      # 用于 after 方法的ID
+
         # --- 语法高亮：定义标签名称列表 (只包含当前需要的) ---
         self.highlight_tags = [
             'comment_tag', 'instruction_tag', 'pseudo_instruction_tag', 'register_tag'
@@ -523,14 +527,11 @@ class App:
         ttk.Label(code_area_frame, text="汇编代码:").grid(row=0, column=0, columnspan=3, sticky=tk.W, pady=(0,5))
 
         # 行号区 (tk.Text)
-        self.line_numbers_text = tk.Text(code_area_frame, width=4, padx=3, takefocus=0, border=0,
-                                         background='lightgrey', state='disabled', wrap='none',
-                                          font=('Arial', 12))
+        self.line_numbers_text = tk.Text(code_area_frame, width=4, padx=3, takefocus=0, border=0,background='lightgrey', state='disabled', wrap='none',font=('Arial', 12))
         self.line_numbers_text.grid(row=1, column=0, sticky='ns')
 
         # 代码编辑区 (tk.Text)
-        self.code_text = tk.Text(code_area_frame, width=60, height=25, wrap='none', undo=True,
-                                 font=('Arial', 12))
+        self.code_text = tk.Text(code_area_frame, width=60, height=25, wrap='none', undo=True,font=('Arial', 12))
         self.code_text.grid(row=1, column=1, sticky='nsew')
 
         # 垂直滚动条 (tk.Scrollbar)
@@ -580,6 +581,8 @@ class App:
         self.step_btn.pack(side=tk.LEFT, padx=2)
         self.run_btn = ttk.Button(controls_frame, text="执行", command=self.run_code, state=tk.DISABLED)
         self.run_btn.pack(side=tk.LEFT, padx=2)
+        self.stop_btn = ttk.Button(controls_frame, text="停止", command=self.stop_continuous_run, state=tk.DISABLED)
+        self.stop_btn.pack(side=tk.LEFT, padx=2)
         self.reset_btn = ttk.Button(controls_frame, text="重置", command=self.reset_simulator, state=tk.DISABLED)
         self.reset_btn.pack(side=tk.LEFT, padx=2)
 
@@ -1037,15 +1040,79 @@ class App:
         self.update_ui_state()
 
     def run_code(self):
+        if self.is_running_continuously: # 防止重复点击
+            return
+
+        if self.simulator.halted:
+            self.status_label.config(text="模拟器已停止，无法连续执行。请重置。")
+            return
+
+        self.is_running_continuously = True
         self.status_label.config(text="正在连续执行...")
-        self.root.update_idletasks()
-        self.simulator.run_program(max_steps=20000)
-        self.status_label.config(text=f"执行完毕. PC = {self.simulator.pc}. 停止状态: {self.simulator.halted}")
-        self.update_ui_state()
+
+        # 禁用不应在运行时按下的按钮
+        self.run_btn.config(state=tk.DISABLED)
+        self.step_btn.config(state=tk.DISABLED)
+        self.assemble_btn.config(state=tk.DISABLED)
+        self.load_btn.config(state=tk.DISABLED)
+        self.reset_btn.config(state=tk.DISABLED) # 运行时通常不允许重置，除非通过停止按钮
+        self.stop_btn.config(state=tk.NORMAL)   # 启用停止按钮
+
+        self._execute_next_instruction_in_run_mode() # 开始执行循环
+
+    def _execute_next_instruction_in_run_mode(self):
+        if not self.is_running_continuously or self.simulator.halted:
+            # 停止条件满足
+            self.is_running_continuously = False # 确保状态正确
+            final_status = "模拟器已停止." if self.simulator.halted else "连续执行被用户停止."
+            if self.simulator.halted and self.simulator.pc >= len(self.simulator.memory): # 或其他结束条件
+                final_status = "程序执行完毕."
+            self.status_label.config(text=final_status)
+
+            self.run_btn.config(state=tk.NORMAL if not self.simulator.halted else tk.DISABLED)
+            self.step_btn.config(state=tk.NORMAL if not self.simulator.halted else tk.DISABLED)
+            self.assemble_btn.config(state=tk.NORMAL)
+            self.load_btn.config(state=tk.NORMAL)
+            self.reset_btn.config(state=tk.NORMAL)
+            self.stop_btn.config(state=tk.DISABLED)
+            self.update_ui_state() # 最后更新一次UI
+            return
+
+        # 执行一步
+        self.simulator.step()
+        self.update_ui_state() # 更新GUI (寄存器、PC、内存、高亮行等)
+
+        # 安排下一次执行 (使用 after)
+        # delay_ms 控制执行速度，0表示尽快执行但仍允许GUI事件处理
+        # 你可以设置为 10, 50, 100 等来可视化执行过程
+        delay_ms = 50
+        self._continuous_run_job = self.root.after(delay_ms, self._execute_next_instruction_in_run_mode)
+
+    def stop_continuous_run(self):
+        """用户点击停止按钮时调用。"""
+        self.is_running_continuously = False
+        if self._continuous_run_job:
+            self.root.after_cancel(self._continuous_run_job) # 取消已安排的 after 任务
+            self._continuous_run_job = None
+        # 状态更新和按钮状态恢复将由 _execute_next_instruction_in_run_mode 的下一次检查处理
+        # 或者在这里直接调用一次以确保状态立即更新：
+        self.status_label.config(text="连续执行已手动停止.")
+        self.run_btn.config(state=tk.NORMAL if not self.simulator.halted else tk.DISABLED)
+        self.step_btn.config(state=tk.NORMAL if not self.simulator.halted else tk.DISABLED)
+        self.assemble_btn.config(state=tk.NORMAL)
+        self.load_btn.config(state=tk.NORMAL)
+        self.reset_btn.config(state=tk.NORMAL)
+        self.stop_btn.config(state=tk.DISABLED)
+        # self.update_ui_state() # 可选，因为 _execute_next_instruction_in_run_mode 会在退出时调用
 
     def reset_simulator(self):
+        self.is_running_continuously = False # 如果正在运行，则停止
+        if self._continuous_run_job:
+            self.root.after_cancel(self._continuous_run_job)
+            self._continuous_run_job = None
+
         self.simulator.reset() # Simulator 内部会重置 pc 和 pc_to_source_line_map
-        self.status_label.config(text="模拟器已重置.")
+        self.status_label.config(text="已重置.")
         # self.pc_to_source_line_map = [] # simulator.reset() 应该处理
         # 清除旧的高亮，因为PC变为0
         if self.current_highlighted_tk_line is not None:
@@ -1058,6 +1125,11 @@ class App:
 
         self.update_ui_state() # 会根据 PC=0 重新高亮 (如果映射存在且有效)
         self.update_line_numbers()
+
+        # 确保停止按钮在重置后也禁用
+        self.stop_btn.config(state=tk.DISABLED)
+        self.run_btn.config(state=tk.NORMAL) # 重置后应该可以运行
+        self.step_btn.config(state=tk.NORMAL) # 重置后应该可以单步
 
 if __name__ == '__main__':
 
