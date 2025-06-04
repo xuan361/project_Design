@@ -12,7 +12,7 @@ class Simulator16Bit:
         self.halted = False
         self.machine_code = [] # 在加载到内存之前存储汇编代码
         self.label_map = {}
-
+        self.pc_to_source_line_map = [] # 存储PC到源码行的映射
         # 将 r0 初始化为 0
         self.registers[register_alias['r0']] = 0
 
@@ -43,41 +43,42 @@ class Simulator16Bit:
 
     def load_program_from_source(self, asm_lines):
         # 将汇编代码转换为机器码，并将其存储在内部
-
+        self.pc_to_source_line_map = [] # 重置映射
+        self.machine_code = []      # 重置机器码存储
         try:
             # 1.扩展伪指令
-            expanded_instr, self.label_map, data_lma_values = pse.expand_pseudo_instructions(asm_lines)
-            # print(f"Expanded: {expanded_instr}")
-            # print(f"Labels: {self.label_map}")
-            # print(f"DataLMA: {data_lma_values}")
+            expanded_instr, self.label_map, data_lma_values, source_lines_for_expanded = pse.expand_pseudo_instructions(asm_lines)
 
-
-            # 2. 解析标签
+           # 2. 解析标签
             resolved_instr = pse.resolve_labels(expanded_instr, self.label_map)
             # print(f"Resolved: {resolved_instr}")
+
+            self.pc_to_source_line_map = source_lines_for_expanded # 存储映射
 
             # 3.组装 解析的指令行
             raw_machine_code = []
             for line_content in resolved_instr:
-                if line_content.strip(): # Ensure not empty
-                    bin_code = pse.assemble_line(line_content.strip()) # Returns "XXXXXXXXXXXXXXXX"
+                if line_content.strip(): # 确保非空
+                    bin_code = pse.assemble_line(line_content.strip()) # 返回"XXXXXXXXXXXXXXXX"
                     raw_machine_code.append(bin_code)
             # print(f"Raw MC: {raw_machine_code}")
 
             # 4. 处理_data_lma值并与指令代码结合
             # 汇编程序会生成扁平的 `final_output_lines`，其中包含指令和数据
-            # 指令部分填充为 256 行
+            # 指令部分填充为 128 行
             # 目前只使用 raw_machine_code
             # 需要对齐
-
+            rom_output_lines_formatted = []
             self.machine_code = []
             # 格式化和存储指令机器代码
             for i, code in enumerate(raw_machine_code):
-                if i < 256: # 最多 256 条指令
-                    self.machine_code.append('_'.join([code[j:j+4] for j in range(0, 16, 4)]))
+                if i < 128: # 最多 128 条指令
+                    code = raw_machine_code[i]
+                    formatted_bin_code = '_'.join([code[j:j+4] for j in range(0, 16, 4)])
+                    rom_output_lines_formatted.append(formatted_bin_code)
 
-            # 少于 256 条指令，填0
-            while len(self.machine_code) < 256:
+            # 少于 128 条指令，填0
+            while len(self.machine_code) < 128:
                 self.machine_code.append("0000_0000_0000_0000")
 
             # 添加 data_lma 值
@@ -90,28 +91,28 @@ class Simulator16Bit:
             for code in raw_machine_code:
                 instruction_machine_code_formatted.append('_'.join([code[j:j+4] for j in range(0, 16, 4)]))
 
-            rom_output_lines = instruction_machine_code_formatted[:256]
-            while len(rom_output_lines) < 256:
+            rom_output_lines = instruction_machine_code_formatted[:128]
+            while len(rom_output_lines) < 128:
                 rom_output_lines.append("0000_0000_0000_0000")
 
-            data_output_lines = []
+            data_output_lines_formatted = []
             k = 0
             while k < len(data_lma_values):
                 byte1_val = data_lma_values[k]
                 byte1_bin = format(byte1_val, '08b')
-                byte1_formatted = f"{byte1_bin[0:4]}_{byte1_bin[4:8]}"
+                byte1_formatted_part1 = f"{byte1_bin[0:4]}_{byte1_bin[4:8]}"
+
+                byte2_formatted_part2 = "0000_0000" # 默认的配对字节
                 if k + 1 < len(data_lma_values):
                     byte2_val = data_lma_values[k+1]
                     byte2_bin = format(byte2_val, '08b')
-                    byte2_formatted = f"{byte2_bin[0:4]}_{byte2_bin[4:8]}"
-                else:
-                    byte2_formatted = "0000_0000"
-                data_output_lines.append(f"{byte1_formatted}_{byte2_formatted}")
+                    byte2_formatted_part2 = f"{byte2_bin[0:4]}_{byte2_bin[4:8]}"
+
+                data_output_lines_formatted.append(f"{byte1_formatted_part1}_{byte2_formatted_part2}")
                 k += 2
-
-            self.machine_code = rom_output_lines + data_output_lines
+            self.load_machine_code_to_memory()
+            self.machine_code = rom_output_lines + data_output_lines_formatted
             # print(f"Final MC for simulator: {self.machine_code[:5]} ...")
-
 
             self.load_machine_code_to_memory()
             self.pc = 0
@@ -119,6 +120,7 @@ class Simulator16Bit:
             return True, "Assembled successfully."
         except Exception as e:
             self.machine_code = []
+            self.pc_to_source_line_map = []
             print(f"Assembly Error: {e}")
             import traceback
             traceback.print_exc()
@@ -127,13 +129,24 @@ class Simulator16Bit:
     def load_machine_code_to_memory(self):
         self.memory = ["0000_0000_0000_0000"] * len(self.memory) # 先清除内存
         # 将汇编程序加载到内存中
-        for i, code_word in enumerate(self.machine_code):
-            if i < len(self.memory):
-                self.memory[i] = code_word.replace('_', '') # 存储为原始二进制字符串
+        for i, formatted_code_word in enumerate(self.machine_code):
+            if i < len(self.memory): # 防止超出预设的 self.memory 大小
+                # 移除下划线，得到纯二进制字符串
+                raw_binary_word = formatted_code_word.replace('_', '')
+                if len(raw_binary_word) == 16 and all(c in '01' for c in raw_binary_word):
+                    self.memory[i] = raw_binary_word
+                else:
+                    print(f"警告: 机器码 \"{formatted_code_word}\" 格式不正确，跳过加载到内存地址 {i}")
+                    self.memory[i] = "0000000000000000" # 或其他错误标记
             else:
-                print(f"Warning: Machine code too large for memory. Truncated at {len(self.memory)} words.")
+                print(f"警告: 机器码数量 ({len(self.machine_code)}) 超出内存容量 ({len(self.memory)})。部分代码未加载。")
                 break
         # print(f"Loaded to memory: {self.memory[:5]}")
+
+        # 如果 self.machine_code 比 self.memory 短，内存中剩余部分将保持其旧值或初始值。
+        # 如果需要用0填充剩余内存：
+        for i in range(len(self.machine_code), len(self.memory)):
+            self.memory[i] = "0000000000000000"
 
 
     def fetch(self):
@@ -573,6 +586,18 @@ class App:
         self.status_label = ttk.Label(code_area_frame, text="已就绪", relief=tk.SUNKEN, anchor=tk.W)
         self.status_label.grid(row=4, column=0, columnspan=3, sticky=(tk.W, tk.E), pady=(5,0))
 
+        # --- 当前执行行高亮：定义标签 ---
+        if hasattr(self, 'code_text'): # 良好的健壮性检查
+            self.code_text.tag_configure('current_execution_line_tag', background='yellow')
+
+        # !!! 新增/确保此行存在且在 update_ui_state() 调用之前 !!!
+        self.current_highlighted_tk_line = None # 存储当前高亮的Tkinter行号 (1-based)
+
+        # ... (其余的 __init__ 代码，例如语法高亮模式定义, _line_number_update_job, _highlight_job 初始化) ...
+
+        self._line_number_update_job = None
+        self._highlight_job = None
+
         # 右侧面板：寄存器和内存视图
         right_pane = ttk.Frame(main_frame, padding="0")
         right_pane.grid(row=0, column=1, sticky=(tk.W, tk.E, tk.N, tk.S), padx=5, pady=5)
@@ -641,7 +666,10 @@ class App:
             'comment_tag', 'instruction_tag', 'pseudo_instruction_tag', 'register_tag'
         ]
 
-        self.update_ui_state()
+
+
+        # --- 初始化UI状态和首次加载 ---
+        self.update_ui_state()      # 调用 _update_current_line_highlight
         self.update_line_numbers()
         self.apply_syntax_highlighting() # 初始加载一次高亮
 
@@ -717,6 +745,38 @@ class App:
             except Exception as e:
                 self.status_label.config(text=f"加载文件错误: {e}")
 
+    def _update_current_line_highlight(self):
+        """更新代码编辑区中当前执行行的高亮。"""
+        # 1. 移除旧的高亮
+        if self.current_highlighted_tk_line is not None:
+            try:
+                # Tkinter 行号是 1-based
+                line_start = f"{self.current_highlighted_tk_line}.0"
+                line_end = f"{self.current_highlighted_tk_line}.end lineend" #确保整行背景
+                self.code_text.tag_remove('current_execution_line_tag', line_start, line_end)
+            except tk.TclError:
+                pass # 如果行不存在或标签移除出错，忽略
+        self.current_highlighted_tk_line = None
+
+        # 2. 应用新的高亮
+        if not self.simulator.halted and hasattr(self.simulator, 'pc_to_source_line_map') and self.simulator.pc_to_source_line_map:
+            current_pc = self.simulator.pc
+            if 0 <= current_pc < len(self.simulator.pc_to_source_line_map):
+                source_line_num_1_based = self.simulator.pc_to_source_line_map[current_pc]
+
+                if source_line_num_1_based > 0: # 确保是一个有效的源码行号
+                    try:
+                        line_start_index = f"{source_line_num_1_based}.0"
+                        line_end_index = f"{source_line_num_1_based}.end lineend"
+
+                        self.code_text.tag_add('current_execution_line_tag', line_start_index, line_end_index)
+                        self.code_text.see(line_start_index) # 滚动到该行使其可见
+                        self.current_highlighted_tk_line = source_line_num_1_based
+                    except tk.TclError as e:
+                        print(f"高亮错误: 无法高亮行 {source_line_num_1_based} (PC={current_pc}): {e}")
+            # else:
+            # print(f"PC {current_pc} 在映射范围之外或映射无效")
+
     def assemble_code(self):
         self.status_label.config(text="正在汇编...")
         self.root.update_idletasks()
@@ -729,10 +789,11 @@ class App:
         if success:
             self.status_label.config(text="汇编成功. 可以执行.")
             self.simulator.halted = False
+    # self.pc_to_source_line_map = self.simulator.pc_to_source_line_map # Simulator内部已存储
         else:
             self.status_label.config(text=f"汇编失败: {message}")
             self.simulator.halted = True
-        self.update_ui_state()
+        self.update_ui_state() # update_ui_state 内部会调用 _update_current_line_highlight
 
     def _on_text_scroll(self, *args):
         # 代码编辑区滚动时，用于更新滚动条位置，并同步行号区滚动
@@ -851,7 +912,7 @@ class App:
             self.reset_btn.config(state=tk.DISABLED)
         # 确保行号区的滚动位置在UI更新时也可能需要同步
         self._scroll_sync_y()
-
+        self._update_current_line_highlight() # 调用高亮更新
 
     def step_code(self):
         if self.simulator.step():
@@ -868,11 +929,20 @@ class App:
         self.update_ui_state()
 
     def reset_simulator(self):
-        self.simulator.reset()
-        self.status_label.config(text="模拟器已重置")
-        self.update_ui_state()
-        self.update_line_numbers() # 重置后也更新一下行号，以防代码被清空等情况
+        self.simulator.reset() # Simulator 内部会重置 pc 和 pc_to_source_line_map
+        self.status_label.config(text="模拟器已重置.")
+        # self.pc_to_source_line_map = [] # simulator.reset() 应该处理
+        # 清除旧的高亮，因为PC变为0
+        if self.current_highlighted_tk_line is not None:
+             try:
+                line_start = f"{self.current_highlighted_tk_line}.0"
+                line_end = f"{self.current_highlighted_tk_line}.end lineend"
+                self.code_text.tag_remove('current_execution_line_tag', line_start, line_end)
+             except tk.TclError: pass
+        self.current_highlighted_tk_line = None
 
+        self.update_ui_state() # 会根据 PC=0 重新高亮 (如果映射存在且有效)
+        self.update_line_numbers()
 
 if __name__ == '__main__':
 

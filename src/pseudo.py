@@ -66,12 +66,15 @@ def strip_comments(line):
 def expand_pseudo_instructions(lines):
     expanded_instructions = []    # 存儲指令字串 (lui, addi, add 等)
     label_map = {}              # 存储指令标签的 "PC" (索引)
-    pc = 0                      # 指令的程序计数器
+    current_expanded_instruction_pc = 0  # 指令的程序计数器
 
-    data_lma_values = []        # 专门存储 _data_lma 的原始數值
+    data_lma_values = []        # 专门存储 _data_lma 的原始数值
     active_data_collection_label = None # 用于追踪当前是否在为 _data_lma 收集数据
 
-    for line_number, raw_line in enumerate(lines):
+    # 存储每条扩展后指令对应的原始源代码行号 (1-based)
+    expanded_instr_source_lines = []
+
+    for actual_source_line_number, raw_line in enumerate(lines, 1):
         line_for_label_detection = strip_comments(raw_line)
 
         if not line_for_label_detection:
@@ -86,17 +89,17 @@ def expand_pseudo_instructions(lines):
             current_line_had_label = True
 
             if not label_name:
-                print(f"Warning on line {line_number + 1}: Empty label name. Processing rest: '{rest_of_line.strip()}'")
+                print(f"Warning on line {actual_source_line_number}: Empty label name. Processing rest: '{rest_of_line.strip()}'")
             elif ' ' in label_name or '\t' in label_name or ',' in label_name:
-                print(f"Warning on line {line_number + 1}: Label '{label_name}' has space/comma.")
+                print(f"Warning on line {actual_source_line_number}: Label '{label_name}' has space/comma.")
 
             if label_name:
                 if label_name in label_map: # 检查是否与 data_lma_values 相关标签冲突 (如果有多个数据标签)
-                    raise ValueError(f"Error on line {line_number + 1}: Duplicate label '{label_name}'")
+                    raise ValueError(f"Error on line {actual_source_line_number}: Duplicate label '{label_name}'")
 
                 active_data_collection_label = label_name # 设置当前活动标签
                 if label_name != '_data_lma': # 普通指令标签
-                    label_map[label_name] = pc
+                    label_map[label_name] = current_expanded_instruction_pc
                 # 对于 _data_lma，不将其 pc 存入 label_map，因为它的数据单独处理
 
             instruction_part = rest_of_line.strip()
@@ -114,24 +117,24 @@ def expand_pseudo_instructions(lines):
             try:
                 args_content = instruction_part.split('.byte', 1)[1]
             except IndexError:
-                raise ValueError(f"L{line_number + 1}: '.byte' for _data_lma needs args. Got: '{instruction_part}'")
+                raise ValueError(f"L{actual_source_line_number}: '.byte' for _data_lma needs args. Got: '{instruction_part}'")
             if not args_content.strip():
-                raise ValueError(f"L{line_number + 1}: '.byte' for _data_lma needs args. Got: '{instruction_part}'")
+                raise ValueError(f"L{actual_source_line_number}: '.byte' for _data_lma needs args. Got: '{instruction_part}'")
 
             byte_values_str = args_content.strip().split(',')
             if not any(s.strip() for s in byte_values_str):
-                raise ValueError(f"L{line_number + 1}: '.byte' for _data_lma no values: '{instruction_part}'")
+                raise ValueError(f"L{actual_source_line_number}: '.byte' for _data_lma no values: '{instruction_part}'")
 
             for val_str in byte_values_str:
                 val_str = val_str.strip()
                 if not val_str:
-                    raise ValueError(f"L{line_number + 1}: Empty val in '.byte' for _data_lma: '{args_content}'")
+                    raise ValueError(f"L{actual_source_line_number}: Empty val in '.byte' for _data_lma: '{args_content}'")
                 try:
                     byte_val = int(val_str, 0)
                 except ValueError:
-                    raise ValueError(f"L{line_number + 1}: Invalid num '{val_str}' in '.byte' for _data_lma.")
-                if not (0 <= byte_val <= 255):
-                    raise ValueError(f"L{line_number + 1}: Byte '{val_str}' out of 0-255 for _data_lma.")
+                    raise ValueError(f"L{actual_source_line_number}: Invalid num '{val_str}' in '.byte' for _data_lma.")
+                if not (0 <= byte_val <= 127):
+                    raise ValueError(f"L{actual_source_line_number}: Byte '{val_str}' out of 0-255 for _data_lma.")
 
                 data_lma_values.append(byte_val) # 存储原始数值
 
@@ -142,6 +145,7 @@ def expand_pseudo_instructions(lines):
             if not current_line_had_label: # 如果 .byte 指令独占一行，在其标签之后
                 active_data_collection_label = None # 清除状态，避免干扰下一行
 
+            continue
         # 应该用不上
         # 处理不属于 _data_lma 的 .byte 指令 (如果有的话，按老方式或报错)
         # elif first_word == '.byte':
@@ -163,12 +167,12 @@ def expand_pseudo_instructions(lines):
 
             if op == 'li':
                 if len(tokens) < 3:
-                    raise ValueError(f"Error on line {line_number + 1}: 'li' instruction requires 2 arguments (rd, immediate). Got: '{instruction_part}'")
+                    raise ValueError(f"Error on line {actual_source_line_number}: 'li' requires 2 args. Got: '{instruction_part}'")
                 rd = tokens[1].replace(',', '')
                 try:
                     imm = int(tokens[2], 0) # 解析立即数
                 except ValueError:
-                    raise ValueError(f"Error on line {line_number + 1}: Invalid immediate value '{tokens[2]}' for 'li'.")
+                    raise ValueError(f"Error on line {actual_source_line_number}: Invalid immediate for 'li'.")
 
                 # 16位 (超出部分会被截断或按 Python 整数处理)
                 target_val = imm & 0xFFFF
@@ -176,7 +180,8 @@ def expand_pseudo_instructions(lines):
                 # lui 负责处理前8位 (imm[15:8])
                 upper_8_bits = (target_val >> 8) & 0xFF
                 expanded_instructions.append(f'lui {rd}, 0x{upper_8_bits:X}')
-                pc += 1
+                expanded_instr_source_lines.append(actual_source_line_number) # 记录行号
+                current_expanded_instruction_pc += 1
 
                 #    addi 负责处理后8位 (imm[7:0])，可能需要两条 addi 指令
                 #    因为根据
@@ -197,48 +202,55 @@ def expand_pseudo_instructions(lines):
                     # 如果中间4位 (imm[7:4]) 非零，则添加第一条 addi
                     if middle_4_bits_value != 0:
                         expanded_instructions.append(f'addi {rd}, {rd}, {middle_4_bits_value}')
-                        pc += 1
+                        expanded_instr_source_lines.append(actual_source_line_number) # 记录行号
+                        current_expanded_instruction_pc += 1
                     # 如果最低4位 (imm[3:0]) 非零，则添加第二个 addi
                     # 或者，如果高12位都是0 (即 upper_8_bits 和 middle_4_bits_value 都是0)，
                     # 且这个最低4位本身就是整个数（例如 li rd, 5），那么也需要这个addi
 
                     if lower_4_bits_value != 0:
                         expanded_instructions.append(f'addi {rd}, {rd}, {lower_4_bits_value}')
-                        pc += 1
+                        expanded_instr_source_lines.append(actual_source_line_number) # 记录行号
+                        current_expanded_instruction_pc += 1
                     # 如果一个数是例如 0x0M0 (M非0)，例如 0x020，即0x0020
                     # lui rd, 0x0
                     # addi rd, rd, 2 (middle_4_bits_value)
                     # lower_4_bits_value 为0，不用第二个 addi
 
             elif op == 'la':
-                if len(tokens) < 3: raise ValueError(f"L{line_number+1}: la needs 2 args.")
+                if len(tokens) < 3: raise ValueError(f"L{actual_source_line_number}: la needs 2 args.")
                 rd = tokens[1].replace(',', '')
                 label_ref = tokens[2]
                 expanded_instructions.append(f'lui {rd}, {label_ref}')
-                pc += 1
+                expanded_instr_source_lines.append(actual_source_line_number) # 记录行号
+                current_expanded_instruction_pc += 1
 
             elif op == 'j':
-                if len(tokens) < 2: raise ValueError(f"L{line_number+1}: j needs 1 arg.")
+                if len(tokens) < 2: raise ValueError(f"L{actual_source_line_number}: j needs 1 arg.")
                 label_ref = tokens[1]
                 expanded_instructions.append(f'jal r0, {label_ref}')
-                pc += 1
+                expanded_instr_source_lines.append(actual_source_line_number) # 记录行号
+                current_expanded_instruction_pc += 1
 
-            elif op == 'jal' and len(tokens) == 2:
+            elif op == 'jal' and len(tokens) == 2: # 伪指令 jal LBL (跳转，返回地址到r0)
                 label_ref = tokens[1].replace(',', '')
                 expanded_instructions.append(f'jal r0, {label_ref}')
-                pc += 1
+                expanded_instr_source_lines.append(actual_source_line_number) # 记录行号
+                current_expanded_instruction_pc += 1
 
             elif op == 'bge':
-                if len(tokens) < 4: raise ValueError(f"L{line_number+1}: bge needs 3 args.")
+                if len(tokens) < 4: raise ValueError(f"L{actual_source_line_number}: bge needs 3 args.")
                 rs1 = tokens[1].replace(',', ''); rs2 = tokens[2].replace(',', ''); label_ref = tokens[3]
                 expanded_instructions.append(f'ble {rs2}, {rs1}, {label_ref}')
-                pc += 1
+                expanded_instr_source_lines.append(actual_source_line_number) # 记录行号
+                current_expanded_instruction_pc += 1
                 
-            else: # 其他指令
+            else: # 其他真实指令 (非伪指令，非.byte)
                 expanded_instructions.append(instruction_part)
-                pc += 1
+                expanded_instr_source_lines.append(actual_source_line_number) # 记录行号
+                current_expanded_instruction_pc += 1
 
-    return expanded_instructions, label_map, data_lma_values
+    return expanded_instructions, label_map, data_lma_values, expanded_instr_source_lines
 
 # 标签解析函数
 def resolve_labels(expanded_lines, label_map):
@@ -446,19 +458,19 @@ if __name__ == '__main__':
             print(f"Error assembling instruction line #{i + 1} (resolved: '{line_content.strip()}'): {e}")
             # exit(1) # 发生错误时可以选择退出
 
-    # 4.  ROM 输出部分 (前256行)
+    # 4.  ROM 输出部分 (前128行)
     rom_output_lines = []
     for i in range(len(instruction_machine_code_raw)):
         if i < 128: # 最多取128条指令放入ROM
             formatted_bin_code = '_'.join([instruction_machine_code_raw[i][j:j+4] for j in range(0, 16, 4)])
             rom_output_lines.append(formatted_bin_code)
 
-    # 如果指令不足256行，用0填充
+    # 如果指令不足128行，用0填充
     while len(rom_output_lines) < 128:
         rom_output_lines.append("0000_0000_0000_0000")
 
     if len(instruction_machine_code_raw) > 128:
-        print(f"Warning: {len(instruction_machine_code_raw)} instructions generated, but ROM section is limited to 256 lines. Truncating.")
+        print(f"Warning: {len(instruction_machine_code_raw)} instructions generated, but ROM section is limited to 128 lines. Truncating.")
 
     # 5.  Data (_data_lma) 输出部分 (从第257行开始)
     data_output_lines = []
