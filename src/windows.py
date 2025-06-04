@@ -734,6 +734,12 @@ class App:
         self.update_line_numbers()
         self.apply_syntax_highlighting() # 初始加载一次高亮
 
+        hardcoded_filepath = "D:/UESTC/2.2/ZhongShe/assembler_py/src/program.txt"
+
+        if hardcoded_filepath: # 确保路径不是空字符串
+            print(f"尝试从预设路径加载文件: {hardcoded_filepath}")
+            self.load_file(filepath=hardcoded_filepath)
+
     def _schedule_highlighting(self):
         """安排语法高亮任务，带延迟。"""
         if self._highlight_job:
@@ -788,23 +794,37 @@ class App:
         # 更新高亮
         self._schedule_highlighting()
 
-    def load_file(self):
-        # ... (load_file 方法保持不变, 但在最后调用 apply_syntax_highlighting)
-        filepath = filedialog.askopenfilename(
-            title="打开汇编文件",
-            filetypes=(("汇编文件", "*.asm *.s *.txt"), ("所有文件", "*.*"))
-        )
-        if filepath:
+    def load_file(self, filepath=None):
+
+    # 加载汇编文件到代码编辑区。
+    # 如果提供了 filepath 参数，则直接加载该文件。否则，弹出文件选择对话框。
+
+        chosen_filepath = 'program.txt' # 使用传入的路径（如果存在）
+
+        if chosen_filepath is None: # 如果没有直接提供路径，则打开对话框
+            chosen_filepath = filedialog.askopenfilename(
+                title="打开汇编文件",
+                filetypes=(("汇编文件", "*.asm *.s *.txt"), ("所有文件", "*.*"))
+            )
+
+        if chosen_filepath: # 如果得到了一个有效的路径 (无论是传入的还是选择的)
             try:
-                with open(filepath, 'r', encoding='utf-8') as f:
+                with open(chosen_filepath, 'r', encoding='utf-8') as f:
                     self.code_text.delete('1.0', tk.END)
                     self.code_text.insert('1.0', f.read())
                 self.code_text.edit_modified(False)
-                self.status_label.config(text=f"已加载: {filepath}")
+                self.status_label.config(text=f"已加载: {chosen_filepath}")
                 self.update_line_numbers()
-                self.apply_syntax_highlighting() # <--- 加载文件后应用高亮
+                if hasattr(self, 'apply_syntax_highlighting'): # 如果有语法高亮功能
+                    self.apply_syntax_highlighting()
+                # 成功加载并高亮后，可以考虑自动汇编 (可选)
+                # self.assemble_code()
+            except FileNotFoundError:
+                self.status_label.config(text=f"错误: 文件未找到 '{chosen_filepath}'")
             except Exception as e:
                 self.status_label.config(text=f"加载文件错误: {e}")
+        # else: # 如果用户取消了文件对话框，或者传入的filepath无效但没有弹窗，则不执行任何操作
+        # self.status_label.config(text="加载操作已取消或路径无效")
 
     def _update_current_line_highlight(self):
         """更新代码编辑区中当前执行行的高亮。"""
