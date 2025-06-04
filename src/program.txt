@@ -7,7 +7,7 @@ start:  //把 data section 从 flash(ROM) 搬运到 ram 中
     li a1, 0x1000  // ram 的起始地址a1 if number > 256 then lui a1, 0x10,  addi a1, a1, 0x00
     li a2, 0x1006    // ram 的结束地址a2  lui a1, 0x10,  addi a1, 0x06
 
-move_loop:             /// 循环移动数据，数据通过a3寄存器进行传递
+move_loop:             // 循环移动数据，数据通过a3寄存器进行传递
     lb a3, 0(a0)
     sb a3, 0(a1)
     addi a0, a0, 1

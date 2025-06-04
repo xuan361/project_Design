@@ -463,12 +463,34 @@ class Simulator16Bit:
 
 class App:
     def __init__(self, root):
+
+        # #测试
+        # print("从 pesudo 加载的 Opcode Map:", pse.opcode_map)
+        # print("从 pseudo 加载的 Register Alias:", pse.register_alias)
+
         self.root = root
         self.root.title("自定义ISA的16位RISC单周期CPU")
 
         # 这里似乎要定义字体
 
+        self.code_font_family = "等线"  # 或 "Consolas", "Courier New", " "
+        self.code_font_size = 11
+        # self.code_font 用于 tk.Text 组件本身的基础字体
+        self.code_font = (self.code_font_family, self.code_font_size)
+
+        # UI 元素 (标签、按钮等) 使用的字体 (如果需要，但当前错误与此无关)
+        self.ui_font_family = "微软雅黑"
+        self.ui_font_size = 10
+        self.ui_font = (self.ui_font_family, self.ui_font_size)
+
+        self.memory_value_font = (self.code_font_family, self.ui_font_size)
+
         self.simulator = Simulator16Bit()
+
+        # --- 语法高亮：定义标签名称列表 (只包含当前需要的) ---
+        self.highlight_tags = [
+            'comment_tag', 'instruction_tag', 'pseudo_instruction_tag', 'register_tag'
+        ] # 之后可以按需添加 'immediate_tag', 'label_def_tag', 'directive_tag'
 
         main_frame = ttk.Frame(root, padding="2")
         main_frame.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
@@ -511,13 +533,25 @@ class App:
 
         self.code_text.config(xscrollcommand=self.h_scrollbar.set)
 
-        # 绑定事件用于同步行号和更新
+        # 语法高亮：配置标签颜色和字体
+        # 注释：绿色斜体（italic） 指令：蓝色加粗（bold)  寄存器：红色
+        self.code_text.tag_configure('comment_tag', foreground='green', font=(self.code_font_family, self.code_font_size, 'italic'))
+        self.code_text.tag_configure('instruction_tag', foreground='blue', font=(self.code_font_family, self.code_font_size, 'bold'))
+        self.code_text.tag_configure('pseudo_instruction_tag', foreground='blue', font=(self.code_font_family, self.code_font_size, 'bold')) # 深蓝
+        self.code_text.tag_configure('register_tag', foreground='red', font=(self.code_font_family, self.code_font_size))
+        # 如果以后添加其他高亮:
+        # self.code_text.tag_configure('immediate_tag', foreground='dark orange', font=self.code_font)
+        # self.code_text.tag_configure('label_def_tag', foreground='dark red', font=(self.code_font_family, self.code_font_size, 'bold'))
+        # self.code_text.tag_configure('directive_tag', foreground='magenta', font=(self.code_font_family, self.code_font_size, 'bold'))
+
+        # 语法高亮：绑定事件
+        # on_text_change 会调用 _schedule_highlighting
         self.code_text.bind('<KeyRelease>', self.on_text_change)
+        self.code_text.bind("<<Modified>>", self.on_text_modified)
         self.code_text.bind('<MouseWheel>', self._on_mousewheel_scroll)
         self.code_text.bind('<Button-4>', self._on_mousewheel_scroll)
         self.code_text.bind('<Button-5>', self._on_mousewheel_scroll)
-        # 当文本框内容改变时（例如撤销/重做/粘贴），也需要更新行号
-        self.code_text.bind("<<Modified>>", self.on_text_modified)
+
 
         # 控制按钮和状态栏
         # 按钮放在 code_area_frame 下方
@@ -529,7 +563,6 @@ class App:
         self.load_btn.pack(side=tk.LEFT, padx=2)
         self.assemble_btn = ttk.Button(controls_frame, text="汇编", command=self.assemble_code)
         self.assemble_btn.pack(side=tk.LEFT, padx=2)
-        # (其他按钮也 pack 到 controls_frame)
         self.step_btn = ttk.Button(controls_frame, text="单步", command=self.step_code, state=tk.DISABLED)
         self.step_btn.pack(side=tk.LEFT, padx=2)
         self.run_btn = ttk.Button(controls_frame, text="执行", command=self.run_code, state=tk.DISABLED)
@@ -574,6 +607,133 @@ class App:
         self.update_ui_state()
         self.update_line_numbers() # 初始加载行号
 
+        self._highlight_job = None # 用于延迟高亮
+
+        # --- 语法高亮：定义正则表达式 ---
+        self.opcodes = list(pse.opcode_map.keys()) # 真实指令
+        self.pseudo_opcodes = ['li', 'la', 'j', 'bge'] # 你定义的伪指令
+
+        # (?i) 表示不区分大小写, \b 表示单词边界
+        instructions_pattern = r"\b(" + "|".join(self.opcodes) + r")\b"
+        pseudo_instructions_pattern = r"\b(" + "|".join(self.pseudo_opcodes) + r")\b"
+
+        register_names = list(pse.register_alias.keys())
+        generic_regs_pattern_core = r"r(?:[0-9]|1[0-5])" # 核心匹配 r0-r15，不含 \b 和捕获组括号
+        # 或者保持原来的 generic_regs_pattern[2:-2] 也可以，它会是 (r(?:[0-9]|1[0-5]))
+
+        sorted_reg_names = sorted(register_names, key=len, reverse=True)
+        # 修改点: 移除模式字符串中的 (?i)
+        # 同时确保 generic_regs_pattern_core 不引入额外的捕获组括号，除非必要
+        # 我们用 generic_regs_pattern[2:-2] 来获取核心部分，它已经是带括号的
+        _generic_regs_pattern_str = r"\b(r(?:[0-9]|1[0-5]))\b" # 原来的定义
+        core_generic_part = _generic_regs_pattern_str[2:-2] # 这会是 "(r(?:[0-9]|1[0-5]))"
+
+        all_registers_pattern = r"\b(" + "|".join(sorted_reg_names) + r"|" + core_generic_part + r")\b"
+
+        self.highlight_patterns = {
+            'comment_tag': r"(#|//)[^\n]*", # 注释通常是大小写敏感的，但 re.IGNORECASE 对它影响不大
+            'instruction_tag': instructions_pattern,
+            'pseudo_instruction_tag': pseudo_instructions_pattern,
+            'register_tag': all_registers_pattern,
+        }
+        # 高亮顺序：注释最先，然后是指令，然后是寄存器
+        self.highlight_order = [
+            'comment_tag', 'instruction_tag', 'pseudo_instruction_tag', 'register_tag'
+        ]
+
+        self.update_ui_state()
+        self.update_line_numbers()
+        self.apply_syntax_highlighting() # 初始加载一次高亮
+
+    def _schedule_highlighting(self):
+        """安排语法高亮任务，带延迟。"""
+        if self._highlight_job:
+            self.root.after_cancel(self._highlight_job)
+        self._highlight_job = self.root.after(200, self.apply_syntax_highlighting) # 200ms 延迟
+
+    def apply_syntax_highlighting(self):
+        """应用语法高亮到代码编辑区。"""
+        if not hasattr(self, 'code_text') or not self.code_text.winfo_exists():
+            return # 如果组件还不存在或已销毁，则不执行
+
+        # 1. 清除旧的自定义高亮标签
+        for tag in self.highlight_tags:
+            self.code_text.tag_remove(tag, "1.0", "end")
+
+        content = self.code_text.get("1.0", "end-1c") # 获取所有文本内容
+
+        # 2. 应用新的高亮
+        for tag_name in self.highlight_order:
+            pattern = self.highlight_patterns.get(tag_name)
+            if not pattern: continue
+
+            flags = re.IGNORECASE # <--- 这个保持不变 (除非特定模式如注释不需要)
+            # 如果 comment_tag 不需要忽略大小写，可以这样：
+            # current_flags = flags if tag_name != 'comment_tag' else 0
+
+            for match in re.finditer(pattern, content, flags): # 使用调整后的 flags
+                start_index = f"1.0 + {match.start()} chars"
+                end_index = f"1.0 + {match.end()} chars"
+                self.code_text.tag_add(tag_name, start_index, end_index)
+
+    def on_text_modified(self, event=None):
+        """当文本框内容被修改时（例如，undo/redo/paste），安排行号和高亮更新。"""
+        if self.code_text.edit_modified():
+            # 更新行号
+            if self._line_number_update_job:
+                self.root.after_cancel(self._line_number_update_job)
+            self._line_number_update_job = self.root.after(50, self.update_line_numbers)
+
+            # 更新高亮
+            self._schedule_highlighting()
+
+            self.code_text.edit_modified(False) # 重置修改标志
+
+    def on_text_change(self, event=None):
+        """按键释放时，安排行号和高亮更新。"""
+        # 更新行号
+        if self._line_number_update_job:
+            self.root.after_cancel(self._line_number_update_job)
+        self._line_number_update_job = self.root.after(100, self.update_line_numbers)
+
+        # 更新高亮
+        self._schedule_highlighting()
+
+    def load_file(self):
+        # ... (load_file 方法保持不变, 但在最后调用 apply_syntax_highlighting)
+        filepath = filedialog.askopenfilename(
+            title="打开汇编文件",
+            filetypes=(("汇编文件", "*.asm *.s *.txt"), ("所有文件", "*.*"))
+        )
+        if filepath:
+            try:
+                with open(filepath, 'r', encoding='utf-8') as f:
+                    self.code_text.delete('1.0', tk.END)
+                    self.code_text.insert('1.0', f.read())
+                self.code_text.edit_modified(False)
+                self.status_label.config(text=f"已加载: {filepath}")
+                self.update_line_numbers()
+                self.apply_syntax_highlighting() # <--- 加载文件后应用高亮
+            except Exception as e:
+                self.status_label.config(text=f"加载文件错误: {e}")
+
+    def assemble_code(self):
+        self.status_label.config(text="正在汇编...")
+        self.root.update_idletasks()
+        self.update_line_numbers()
+        self.apply_syntax_highlighting() # <--- 汇编前确保高亮
+        # ... (其余 assemble_code 代码不变) ...
+        asm_code = self.code_text.get('1.0', tk.END)
+        asm_lines = asm_code.splitlines()
+        success, message = self.simulator.load_program_from_source(asm_lines)
+        if success:
+            self.status_label.config(text="汇编成功. 可以执行.")
+            self.simulator.halted = False
+        else:
+            self.status_label.config(text=f"汇编失败: {message}")
+            self.simulator.halted = True
+        self.update_ui_state()
+
     def _on_text_scroll(self, *args):
         # 代码编辑区滚动时，用于更新滚动条位置，并同步行号区滚动
         self.v_scrollbar.set(*args) # 更新滚动条
@@ -586,7 +746,6 @@ class App:
 
     def _on_mousewheel_scroll(self, event):
         # 处理代码编辑区的鼠标滚轮事件，并同步行号区
-        # 对于Windows, event.delta通常是120的倍数
         if event.num == 4:
             self.code_text.yview_scroll(-1, "units")
             self.line_numbers_text.yview_scroll(-1, "units")
@@ -667,38 +826,6 @@ class App:
         self.line_numbers_text.yview_moveto(top_fraction)
         # 滚动条的位置也应该被正确设置，这由 _on_text_scroll -> self.v_scrollbar.set() 完成
 
-    def load_file(self):
-        filepath = filedialog.askopenfilename(
-            title="打开文件",
-            filetypes=(("Assembly files", "*.asm *.s *.txt"), ("All files", "*.*"))
-        )
-        if filepath:
-            try:
-                with open(filepath, 'r', encoding='utf-8') as f:
-                    self.code_text.delete('1.0', tk.END)
-                    self.code_text.insert('1.0', f.read())
-                self.code_text.edit_modified(False) # 重置修改标志
-                self.status_label.config(text=f"已加载: {filepath}")
-                self.update_line_numbers()  # 加载文件后更新行号
-                # self.apply_syntax_highlighting() # 如果之后添加语法高亮
-            except Exception as e:
-                self.status_label.config(text=f"加载文件错误: {e}")
-
-    def assemble_code(self):
-        self.status_label.config(text="正在汇编...")
-        self.root.update_idletasks()
-        self.update_line_numbers() # 汇编前确保行号最新
-        asm_code = self.code_text.get('1.0', tk.END)
-        asm_lines = asm_code.splitlines()
-        success, message = self.simulator.load_program_from_source(asm_lines)
-        if success:
-            self.status_label.config(text="汇编成功，等待执行")
-            self.simulator.halted = False
-        else:
-            self.status_label.config(text=f"汇编失败: {message}")
-            self.simulator.halted = True
-        self.update_ui_state()
-
     def update_ui_state(self):
         for i in range(16):
             val = self.simulator.get_reg_value(i)
@@ -746,6 +873,7 @@ class App:
         self.update_ui_state()
         self.update_line_numbers() # 重置后也更新一下行号，以防代码被清空等情况
 
+
 if __name__ == '__main__':
 
     _original_opcode_map = pse.opcode_map.copy()
@@ -757,7 +885,6 @@ if __name__ == '__main__':
     if 'register_alias' not in globals(): register_alias = _original_reg_alias
     if 'reg_bin' not in globals() or pse.reg_bin.__doc__ is None : reg_bin = _original_reg_bin
     if 'imm_bin' not in globals() or pse.imm_bin.__doc__ is None : imm_bin = _original_imm_bin
-
 
     root = tk.Tk()
     app = App(root)
