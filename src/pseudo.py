@@ -1,3 +1,5 @@
+# 若想切换单独使用或配合 windows.py 使用，调整 expand_pseudo_instructions(lines) 末尾
+
 import re
 
 # 原始操作码表
@@ -250,6 +252,11 @@ def expand_pseudo_instructions(lines):
                 expanded_instr_source_lines.append(actual_source_line_number) # 记录行号
                 current_expanded_instruction_pc += 1
 
+    # 二选一
+
+    # # 单独使用
+    # return expanded_instructions, label_map, data_lma_values
+    # 配合 windows.py 使用
     return expanded_instructions, label_map, data_lma_values, expanded_instr_source_lines
 
 # 标签解析函数
