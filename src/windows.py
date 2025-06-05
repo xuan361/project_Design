@@ -486,14 +486,14 @@ class App:
 
         # 这里似乎要定义字体
 
-        self.code_font_family = "等线"  # 或 "Consolas", "Courier New", " "
-        self.code_font_size = 11
+        self.code_font_family = "Courier New"  # 或 "Consolas", "Courier New", " "
+        self.code_font_size = 12
         # self.code_font 用于 tk.Text 组件本身的基础字体
         self.code_font = (self.code_font_family, self.code_font_size)
 
         # UI 元素 (标签、按钮等) 使用的字体 (如果需要，但当前错误与此无关)
-        self.ui_font_family = "微软雅黑"
-        self.ui_font_size = 10
+        self.ui_font_family = "Arial"
+        self.ui_font_size = 12
         self.ui_font = (self.ui_font_family, self.ui_font_size)
 
         self.memory_value_font = (self.code_font_family, self.ui_font_size)
@@ -508,6 +508,9 @@ class App:
         self.highlight_tags = [
             'comment_tag', 'instruction_tag', 'pseudo_instruction_tag', 'register_tag'
         ] # 之后可以按需添加 'immediate_tag', 'label_def_tag', 'directive_tag'
+
+        # 新增：断点相关初始化
+        self.breakpoints = set() # 存储设置了断点的源文件行号 (1-based)
 
         main_frame = ttk.Frame(root, padding="2")
         main_frame.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
@@ -527,11 +530,16 @@ class App:
         ttk.Label(code_area_frame, text="汇编代码:").grid(row=0, column=0, columnspan=3, sticky=tk.W, pady=(0,5))
 
         # 行号区 (tk.Text)
-        self.line_numbers_text = tk.Text(code_area_frame, width=4, padx=3, takefocus=0, border=0,background='lightgrey', state='disabled', wrap='none',font=('Arial', 12))
+        self.line_numbers_text = tk.Text(code_area_frame, width=4, padx=1, takefocus=0, borderwidth=0,background='lightgrey', state='disabled', wrap='none',font=self.code_font,spacing1=0, spacing2=0, spacing3=0)
         self.line_numbers_text.grid(row=1, column=0, sticky='ns')
 
+        # 新增：为行号区绑定点击事件
+        self.line_numbers_text.bind("<Button-1>", self.on_line_number_click)
+        # 新增：为行号区的断点标记配置一个tag
+        self.line_numbers_text.tag_configure("breakpoint_set_marker", foreground="red", font=(self.code_font_family, self.code_font_size, "bold"))
+
         # 代码编辑区 (tk.Text)
-        self.code_text = tk.Text(code_area_frame, width=60, height=25, wrap='none', undo=True,font=('Arial', 12))
+        self.code_text = tk.Text(code_area_frame, width=60, height=25, borderwidth=0, wrap='none', undo=True,font=self.code_font,spacing1=0, spacing2=0, spacing3=0)
         self.code_text.grid(row=1, column=1, sticky='nsew')
 
         # 垂直滚动条 (tk.Scrollbar)
@@ -549,9 +557,9 @@ class App:
 
         # 语法高亮：配置标签颜色和字体
         # 注释：绿色斜体（italic） 指令：蓝色加粗（bold)  寄存器：红色
-        self.code_text.tag_configure('comment_tag', foreground='green', font=(self.code_font_family, self.code_font_size, 'italic'))
-        self.code_text.tag_configure('instruction_tag', foreground='blue', font=(self.code_font_family, self.code_font_size, 'bold'))
-        self.code_text.tag_configure('pseudo_instruction_tag', foreground='blue', font=(self.code_font_family, self.code_font_size, 'bold')) # 深蓝
+        self.code_text.tag_configure('comment_tag', foreground='green', font=(self.code_font_family, self.code_font_size,'italic'))
+        self.code_text.tag_configure('instruction_tag', foreground='blue', font=(self.code_font_family, self.code_font_size,'bold'))
+        self.code_text.tag_configure('pseudo_instruction_tag', foreground='blue', font=(self.code_font_family, self.code_font_size,'bold')) # 深蓝
         self.code_text.tag_configure('register_tag', foreground='red', font=(self.code_font_family, self.code_font_size))
         # 如果以后添加其他高亮:
         # self.code_text.tag_configure('immediate_tag', foreground='dark orange', font=self.code_font)
@@ -661,6 +669,9 @@ class App:
 
 
         self._line_number_update_job = None # 用于延迟更新行号
+        self._highlight_job = None
+        self.is_running_continuously = False # For continuous run
+        self._continuous_run_job = None    # For continuous run
         self.update_ui_state()
         self.update_line_numbers() # 初始加载行号
 
@@ -695,6 +706,7 @@ class App:
 
         self.update_ui_state()
         self.update_line_numbers()
+        self._redraw_line_numbers()
         if hasattr(self, 'apply_syntax_highlighting'):
             self.apply_syntax_highlighting()
 
@@ -743,6 +755,103 @@ class App:
             print(f"尝试从预设路径加载文件: {hardcoded_filepath}")
             self.load_file(filepath=hardcoded_filepath)
 
+    def on_line_number_click(self, event):
+        """处理行号区域的点击事件，用于切换断点。"""
+        try:
+            # 获取点击位置对应的行号 (1-based)
+            # index = self.line_numbers_text.index(f"@{event.x},{event.y}")
+            # clicked_line_num_str = index.split('.')[0]
+            # clicked_line_num = int(clicked_line_num_str)
+
+            # 更可靠的方式是基于 y 计算，因为行号区宽度固定，x 可能不准
+            # 或者，如果行号是简单地每行一个数字，可以用 dlineinfo
+            # 我们假设行号区每行就是一个数字加换行
+            # index = self.line_numbers_text.index(f"@0,{event.y}") # 用x=0确保在行首
+
+            # 一个更简单的方式是获取当前鼠标y坐标下的行开始
+            # self.line_numbers_text.mark_set("click_pos", f"@{event.x},{event.y}")
+            # line_start_index = self.line_numbers_text.index("click_pos linestart")
+
+            line_start_index = self.line_numbers_text.index(f"@{event.x},{event.y} linestart")
+            clicked_line_num = int(line_start_index.split('.')[0])
+
+            # 检查点击的行号是否在有效代码行范围内
+            code_lines = int(self.code_text.index('end-1c').split('.')[0]) if self.code_text.get("1.0", "end-1c").strip() else 0
+
+            if 1 <= clicked_line_num <= code_lines: # 确保行号有效
+                if clicked_line_num in self.breakpoints:
+                    self.breakpoints.remove(clicked_line_num)
+                    print(f"断点已移除: 第 {clicked_line_num} 行")
+                else:
+                    self.breakpoints.add(clicked_line_num)
+                    print(f"断点已设置: 第 {clicked_line_num} 行")
+                self._redraw_line_numbers() # 更新行号区的显示以反映断点变化
+            else:
+                print(f"无效的断点行: {clicked_line_num} (总代码行数: {code_lines})")
+
+            # 调试
+            print(f"--- DEBUG: 断点切换后, self.breakpoints = {self.breakpoints} ---") # <--- 新增打印
+            self._redraw_line_numbers()
+
+        except ValueError: # 如果点击处无法解析为行号
+            pass
+        except tk.TclError: # 如果 index 无效
+            pass
+        return "break" # 阻止 Text 组件的默认点击行为（例如移动光标）
+
+    def _redraw_line_numbers(self, event=None):
+        """更新行号区域的显示，并标记断点。"""
+
+        # 调试
+        print(f"--- DEBUG: _redraw_line_numbers 被调用. 当前断点: {self.breakpoints} ---")
+
+        self.line_numbers_text.config(state='normal')
+        self.line_numbers_text.delete('1.0', 'end')
+
+        lines_str = self.code_text.index('end-1c').split('.')[0]
+        lines = int(lines_str) if lines_str else 1
+        first_char_of_last_line = self.code_text.get(f"{lines}.0") if lines > 0 else ""
+        if not self.code_text.get("1.0", "end-1c").strip() and lines == 1 and not first_char_of_last_line:
+            lines = 0
+
+        max_digits = len(str(lines)) if lines > 0 else 1
+
+        # 宽度至少能容纳 max_digits 个字符，或者一个 "●" 加上可能的对齐空格
+        # 我们仍然以 max_digits 为基准宽度，让 "●" 也尽量对齐
+        display_width = max_digits
+        self.line_numbers_text.config(width=display_width + 1) # 加1是为了左右的一点点边距感或防止字符粘连
+
+        if lines > 0:
+            for i in range(1, lines + 1):
+                line_display_content = ""
+                apply_breakpoint_tag = False
+
+                if i in self.breakpoints:
+                    # 用 "●" 代替数字，并用空格使其右对齐，占据 max_digits 宽度
+                    line_display_content = "●".rjust(max_digits)
+                    apply_breakpoint_tag = True
+                else:
+                    line_display_content = str(i).rjust(max_digits) # 数字右对齐
+
+                full_line_in_gutter = f"{line_display_content}\n"
+
+                # 获取插入此行前的 Tkinter 文本索引，用于精确打标签
+                current_line_tk_index_str = f"{i}.0" # 行号区的第i行
+
+                self.line_numbers_text.insert('end', full_line_in_gutter)
+
+                if apply_breakpoint_tag:
+                    # 为刚刚插入的 "●" (或整个填充后的字符串) 应用标签
+                    # 注意：这里的索引是相对于 line_numbers_text 内部的
+                    tag_start = current_line_tk_index_str
+                    # tag_end 计算需要精确到 line_display_content 的末尾
+                    tag_end = f"{current_line_tk_index_str} + {len(line_display_content)} chars"
+                    self.line_numbers_text.tag_add("breakpoint_set_marker", tag_start, tag_end)
+
+        self.line_numbers_text.config(state='disabled')
+        self.line_numbers_text.update_idletasks()
+        self._scroll_sync_y()
+
     def _schedule_highlighting(self):
         """安排语法高亮任务，带延迟。"""
         if self._highlight_job:
@@ -780,11 +889,11 @@ class App:
             # 更新行号
             if self._line_number_update_job:
                 self.root.after_cancel(self._line_number_update_job)
-            self._line_number_update_job = self.root.after(50, self.update_line_numbers)
+            self._line_number_update_job = self.root.after(50, self._redraw_line_numbers)
 
             # 更新高亮
-            self._schedule_highlighting()
-
+            if hasattr(self, '_schedule_highlighting'):
+                self._schedule_highlighting()
             self.code_text.edit_modified(False) # 重置修改标志
 
     def on_text_change(self, event=None):
@@ -792,10 +901,11 @@ class App:
         # 更新行号
         if self._line_number_update_job:
             self.root.after_cancel(self._line_number_update_job)
-        self._line_number_update_job = self.root.after(100, self.update_line_numbers)
+        self._line_number_update_job = self.root.after(100, self._redraw_line_numbers)
 
-        # 更新高亮
-        self._schedule_highlighting()
+        if hasattr(self, '_schedule_highlighting'):
+            self._schedule_highlighting() # 更新高亮
+
 
     def load_file(self, filepath=None):
 
@@ -817,7 +927,7 @@ class App:
                     self.code_text.insert('1.0', f.read())
                 self.code_text.edit_modified(False)
                 self.status_label.config(text=f"已加载: {chosen_filepath}")
-                self.update_line_numbers()
+                self._redraw_line_numbers()
                 if hasattr(self, 'apply_syntax_highlighting'): # 如果有语法高亮功能
                     self.apply_syntax_highlighting()
                 # 成功加载并高亮后，可以考虑自动汇编 (可选)
@@ -866,10 +976,20 @@ class App:
         self.root.update_idletasks()
         self.update_line_numbers()
         self.apply_syntax_highlighting() # <--- 汇编前确保高亮
-        # ... (其余 assemble_code 代码不变) ...
+
+        # 调试
+        if hasattr(self, '_redraw_line_numbers'): # 如果需要，在汇编前先刷新一次行号区
+            self._redraw_line_numbers()
+
+        print(f"--- DEBUG: assemble_code - 汇编前, self.breakpoints = {self.breakpoints} ---")
+
         asm_code = self.code_text.get('1.0', tk.END)
         asm_lines = asm_code.splitlines()
         success, message = self.simulator.load_program_from_source(asm_lines)
+
+        # 调试
+        print(f"--- DEBUG: assemble_code - 汇编后, self.breakpoints = {self.breakpoints} ---")
+
         if success:
             self.status_label.config(text="汇编成功. 可以执行.")
             self.simulator.halted = False
@@ -902,25 +1022,6 @@ class App:
             self.code_text.yview_scroll(scroll_amount, "units")
             self.line_numbers_text.yview_scroll(scroll_amount, "units")
         return "break" # 阻止事件进一步传播导致可能的双重滚动
-
-    def on_text_modified(self, event=None):
-        # 当文本框内容被修改时（例如，undo/redo/paste），安排行号更新
-        # <<Modified>> 事件会在每次修改后触发，需要一个标志来避免不必要的重复更新
-        # Text widget的 <<Modified>> 会在每次修改后将自身的 "modified" 标志设为 True
-        # 检查这个标志，并在更新行号后将其重设为 False
-        if self.code_text.edit_modified():
-            if self._line_number_update_job:
-                self.root.after_cancel(self._line_number_update_job)
-            self._line_number_update_job = self.root.after(50, self.update_line_numbers) # 稍作延迟
-            self.code_text.edit_modified(False) # 重置修改标志
-
-    def on_text_change(self, event=None):
-        # 按键释放时，安排行号更新 (也用于语法高亮)
-        if self._line_number_update_job:
-            self.root.after_cancel(self._line_number_update_job)
-        # 使用较短延迟或在 on_text_modified 中处理更佳
-        self._line_number_update_job = self.root.after(100, self.update_line_numbers)
-
 
     def update_line_numbers(self, event=None):
         # 更新行号区域的显示
@@ -1114,6 +1215,14 @@ class App:
         self.simulator.reset() # Simulator 内部会重置 pc 和 pc_to_source_line_map
         self.status_label.config(text="已重置.")
         # self.pc_to_source_line_map = [] # simulator.reset() 应该处理
+
+        if hasattr(self, 'breakpoints') and isinstance(self.breakpoints, set):
+            self.breakpoints.clear()
+            print("--- DEBUG: 所有断点已在重置时清除 ---") # 可选的调试信息
+        else:
+            # 如果 breakpoints 属性不存在或类型不正确，创建一个空的，以防后续代码出错
+            self.breakpoints = set()
+
         # 清除旧的高亮，因为PC变为0
         if self.current_highlighted_tk_line is not None:
              try:
@@ -1124,7 +1233,10 @@ class App:
         self.current_highlighted_tk_line = None
 
         self.update_ui_state() # 会根据 PC=0 重新高亮 (如果映射存在且有效)
-        self.update_line_numbers()
+        if hasattr(self, '_redraw_line_numbers'): # 确保方法存在
+            self._redraw_line_numbers()
+        elif hasattr(self, 'update_line_numbers'): # 兼容旧名称
+            self.update_line_numbers()
 
         # 确保停止按钮在重置后也禁用
         self.stop_btn.config(state=tk.DISABLED)
