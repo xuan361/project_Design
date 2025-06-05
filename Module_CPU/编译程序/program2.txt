@@ -7,8 +7,8 @@ start:  //把 data section 从 flash(ROM) 搬运到 ram 中
     li a1, 0x1000  // ram 的起始地址a1 if number > 256 then lui a1, 0x10,  addi a1, a1, 0x00 
     li a2, 0x1005    // ram 的结束地址a2  lui a1, 0x10,  addi a1, 0x06
 
-    addi  a3, a0, 0     // ROM->RAM的ROM地址寄存器a3 (r6)
-    addi  a4, a1, 0     // ROM->RAM的RAM地址寄存器a4
+    addi a3, a0, 0     // ROM->RAM的ROM地址寄存器a3 (r6)
+    addi a4, a1, 0     // ROM->RAM的RAM地址寄存器a4
 
 move_loop:             /// 循环移动数据，数据通过a5寄存器进行传递
     lb a5, 0(a3)
@@ -34,17 +34,15 @@ outer_loop1:
             ble a7, a2, inner_loop1
     addi a6, a6, 1
     ble a6, a4, outer_loop1_mid
-    jal  outer_loop1_out
+    jal  end_sort
 outer_loop1_mid:
     jal  outer_loop1
-outer_loop1_out:
-
 
 end_sort:
     jal r0, end_sort
 
 _data_lma:
-    .byte 13, 12, 7, 12, 9, 11       //内存空间为8位
+    .byte 3,5,8,4,13,1       //内存空间为8位
 
 
 

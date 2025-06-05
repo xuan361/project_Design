@@ -12,9 +12,14 @@ module cpu_system_tb();
     wire led3; // 连接到顶层模块的LED输出
     wire led4; // 连接到顶层模块的LED输出
 
-    wire [6:0] seg;
-    wire [5:0] sel; 
-
+    wire  dig1;    //数码管从左到右为1-6
+    wire  dig2;
+    wire  dig3;
+    wire  dig4; 
+    wire  dig5; 
+    wire  dig6; 
+    wire [6:0] out;
+    
     localparam MAX_INSTRUCTIONS = 256; // Testbench内存能存储的最大指令数
 
     // 实例化顶层模块

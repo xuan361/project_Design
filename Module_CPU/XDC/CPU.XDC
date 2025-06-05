@@ -14,28 +14,14 @@ set_property PACKAGE_PIN Y18    [get_ports wait_transport]       ;# 扩展IO CN3
 set_property IOSTANDARD LVCMOS33 [get_ports wait_transport]
 set_property PULLDOWN true      [get_ports wait_transport]       ;# 默认下拉防干扰
 
-# 六位数码管约束
-# 位选信号（低有效，DIG1-DIG6）
-set_property PACKAGE_PIN K18   [get_ports {sel[0]}]  ;# DIG1 位选
-set_property PACKAGE_PIN K16   [get_ports {sel[1]}]  ;# DIG2 位选
-set_property PACKAGE_PIN L16   [get_ports {sel[2]}]  ;# DIG3 位选
-set_property PACKAGE_PIN G20   [get_ports {sel[3]}]  ;# DIG4 位选
-set_property PACKAGE_PIN H20   [get_ports {sel[4]}]  ;# DIG5 位选
-set_property PACKAGE_PIN H18   [get_ports {sel[5]}]  ;# DIG6 位选
 
-# 段选信号（共阳，低有效 a-g=seg[6:0]）
-set_property PACKAGE_PIN AA20    [get_ports {seg[6]}]  ;# a段
-set_property PACKAGE_PIN W22    [get_ports {seg[5]}]  ;# b段
-set_property PACKAGE_PIN AB20    [get_ports {seg[4]}]  ;# c段
-set_property PACKAGE_PIN V22    [get_ports {seg[3]}]  ;# d段
-set_property PACKAGE_PIN W21   [get_ports {seg[2]}]  ;# e段
-set_property PACKAGE_PIN P19    [get_ports {seg[1]}]  ;# f段
-set_property PACKAGE_PIN U22   [get_ports {seg[0]}]  ;# g段
 
-# 数码管公共配置
-set_property IOSTANDARD LVCMOS33 [get_ports {sel[*] seg[*]}]
-set_property DRIVE 8            [get_ports {sel[*] seg[*]}]  ;# 8mA驱动增强亮度
-set_property PULLUP true        [get_ports {sel[*]}]         ;# 位选默认高电平
+# 串口与控制信号约束
+# UART接收引脚（对应底板Type-C串口）
+set_property PACKAGE_PIN W17    [get_ports uart_rx_pin]  ;# CH340G_RX
+set_property IOSTANDARD LVCMOS33 [get_ports uart_rx_pin]
+set_property PULLUP true        [get_ports uart_rx_pin]  ;# 串口默认上拉
+
 
 
 # LED指示灯约束（对应Mini底板LED1-LED4）
@@ -47,9 +33,66 @@ set_property IOSTANDARD LVCMOS33 [get_ports {led1 led2 led3 led4}]
 set_property DRIVE 8            [get_ports {led1 led2 led3 led4}] ;# 高亮度驱动
 
 
-# 串口与控制信号约束
-# UART接收引脚（对应底板Type-C串口）
-set_property PACKAGE_PIN W17    [get_ports uart_rx_pin]  ;# CH340G_RX
-set_property IOSTANDARD LVCMOS33 [get_ports uart_rx_pin]
-set_property PULLUP true        [get_ports uart_rx_pin]  ;# 串口默认上拉
 
+# 设置数码管引脚的约束
+set_property PACKAGE_PIN K18 [get_ports dig1]
+set_property IOSTANDARD LVCMOS33 [get_ports dig1]
+
+set_property PACKAGE_PIN K16 [get_ports dig2]
+set_property IOSTANDARD LVCMOS33 [get_ports dig2]
+
+set_property PACKAGE_PIN L16 [get_ports dig3]
+set_property IOSTANDARD LVCMOS33 [get_ports dig3]
+
+set_property PACKAGE_PIN G20 [get_ports dig4]
+set_property IOSTANDARD LVCMOS33 [get_ports dig4]
+
+set_property PACKAGE_PIN H20 [get_ports dig5]
+set_property IOSTANDARD LVCMOS33 [get_ports dig5]
+
+set_property PACKAGE_PIN H18 [get_ports dig6]
+set_property IOSTANDARD LVCMOS33 [get_ports dig6]
+
+set_property PACKAGE_PIN U22 [get_ports out[0]]
+set_property IOSTANDARD LVCMOS33 [get_ports out[0]]
+
+set_property PACKAGE_PIN P19 [get_ports out[1]]
+set_property IOSTANDARD LVCMOS33 [get_ports out[1]]
+
+set_property PACKAGE_PIN W21 [get_ports out[2]]
+set_property IOSTANDARD LVCMOS33 [get_ports out[2]]
+
+set_property PACKAGE_PIN V22 [get_ports out[3]]
+set_property IOSTANDARD LVCMOS33 [get_ports out[3]]
+
+set_property PACKAGE_PIN AB20 [get_ports out[4]]
+set_property IOSTANDARD LVCMOS33 [get_ports out[4]]
+
+set_property PACKAGE_PIN W22 [get_ports out[5]]
+set_property IOSTANDARD LVCMOS33 [get_ports out[5]]
+
+set_property PACKAGE_PIN AA20 [get_ports out[6]]
+set_property IOSTANDARD LVCMOS33 [get_ports out[6]]
+
+# # 六位数码管约束
+# # 位选信号（低有效，DIG1-DIG6）
+# set_property PACKAGE_PIN K18   [get_ports {sel[0]}]  ;# DIG1 位选
+# set_property PACKAGE_PIN K16   [get_ports {sel[1]}]  ;# DIG2 位选
+# set_property PACKAGE_PIN L16   [get_ports {sel[2]}]  ;# DIG3 位选
+# set_property PACKAGE_PIN G20   [get_ports {sel[3]}]  ;# DIG4 位选
+# set_property PACKAGE_PIN H20   [get_ports {sel[4]}]  ;# DIG5 位选
+# set_property PACKAGE_PIN H18   [get_ports {sel[5]}]  ;# DIG6 位选
+
+# # 段选信号（共阳，低有效 a-g=seg[6:0]）
+# set_property PACKAGE_PIN AA20    [get_ports {seg[6]}]  ;# a段
+# set_property PACKAGE_PIN W22    [get_ports {seg[5]}]  ;# b段
+# set_property PACKAGE_PIN AB20    [get_ports {seg[4]}]  ;# c段
+# set_property PACKAGE_PIN V22    [get_ports {seg[3]}]  ;# d段
+# set_property PACKAGE_PIN W21   [get_ports {seg[2]}]  ;# e段
+# set_property PACKAGE_PIN P19    [get_ports {seg[1]}]  ;# f段
+# set_property PACKAGE_PIN U22   [get_ports {seg[0]}]  ;# g段
+
+# # 数码管公共配置
+# set_property IOSTANDARD LVCMOS33 [get_ports {sel[*] seg[*]}]
+# set_property DRIVE 8            [get_ports {sel[*] seg[*]}]  ;# 8mA驱动增强亮度
+# set_property PULLUP true        [get_ports {sel[*]}]         ;# 位选默认高电平

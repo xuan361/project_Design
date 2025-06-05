@@ -31,8 +31,13 @@ module SingleCPU(
     output  led3,
     output  led4,    // led4指示CPU暂停状态(1=暂停/加载, 0=加载完成/运行)
 
-    output  [6:0] seg,// 段选信号（共阳，a-g=seg[6:0]）
-    output  [5:0] sel // 位选信号（低有效，DIG1-DIG6）
+    output  dig1,    //数码管从左到右为1-6
+    output  dig2,
+    output  dig3,
+    output  dig4, 
+    output  dig5, 
+    output  dig6, 
+    output [6:0] out 
     );
 
     //  1. 定义状态，用于处理字节接收和拼接
@@ -218,7 +223,7 @@ module SingleCPU(
     ALU alu(ALUOp, ReadData1, B,  result, zero);
 
     // DataMemory：用于内存存储，内存读写
-    DataMemory DM(CLK, RESET, wmem && cpu_run_enable, result, ReadData2, memc ,DataFromROM, DataOut, led1_from_DM, led2_from_DM, led3_from_DM, led4_from_DM, ROMDataAddress, seg, sel);
+    DataMemory DM(CLK, RESET, wmem && cpu_run_enable, result, ReadData2, memc ,DataFromROM, DataOut, led1_from_DM, led2_from_DM, led3_from_DM, led4_from_DM, ROMDataAddress, dig1, dig2, dig3, dig4, dig5, dig6, out);
 
     assign currentAddress_2 = currentAddress + 2;
     assign currentAddress_immediate = currentAddress + immExt;

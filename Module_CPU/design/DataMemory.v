@@ -15,8 +15,13 @@ module DataMemory(
     output reg led3,
     output reg led4,
     output reg [15:0] ROMDataAddress,
-    output [6:0] seg,// 段选信号（共阳，a-g=seg[6:0]）
-    output [5:0] sel // 位选信号（低有效，DIG1-DIG6）
+    output  dig1,    //数码管从左到右为1-6
+    output  dig2,
+    output  dig3,
+    output  dig4, 
+    output  dig5, 
+    output  dig6, 
+    output [6:0] out 
 ); 
     localparam RAMStartAddress = 16'h1000;
     localparam ledAddr = 16'h2000;
@@ -46,7 +51,7 @@ module DataMemory(
     initial 
     begin
         for(i = 0; i < 64; i = i + 1) RAM[i] = 8'b0;
-        for(i = 0; i < 6; i = i + 1) digit[i] = RAM[i];
+        // for(i = 0; i < 6; i = i + 1) digit[i] = RAM[i];
         led1 <= 1'b0;    led2 <= 1'b0;    led3 <= 1'b0; led4 <= 1'b0;
     end
 
@@ -87,7 +92,7 @@ module DataMemory(
     end
 
     // 数码管对应输入数据
-    always @(posedge CLK) begin
+    always @(*) begin
         digit[0] = RAM[0];
         digit[1] = RAM[1];
         digit[2] = RAM[2];
@@ -121,6 +126,6 @@ module DataMemory(
 
     end   
 
-SixDigitDisplay display(CLK, RESET, digit[0], digit[1], digit[2], digit[3],digit[4], digit[5], seg, sel);
+SixDigitDisplay display(CLK, RESET, digit[0], digit[1], digit[2], digit[3],digit[4], digit[5], dig1, dig2, dig3, dig4, dig5, dig6, out);
 
 endmodule
