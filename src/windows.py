@@ -484,19 +484,19 @@ class App:
         self.root = root
         self.root.title("自定义ISA的16位RISC单周期CPU")
 
+        import tkinter.font as tkFont
+
         # 这里似乎要定义字体
 
-        self.code_font_family = "Courier New"  # 或 "Consolas", "Courier New", " "
-        self.code_font_size = 12
+        self.base_font_family = "Courier New"
+        self.base_font_size = 12
         # self.code_font 用于 tk.Text 组件本身的基础字体
-        self.code_font = (self.code_font_family, self.code_font_size)
+        self.actual_code_font = tkFont.Font(family=self.base_font_family,size=self.base_font_size)
 
         # UI 元素 (标签、按钮等) 使用的字体 (如果需要，但当前错误与此无关)
         self.ui_font_family = "Arial"
         self.ui_font_size = 12
         self.ui_font = (self.ui_font_family, self.ui_font_size)
-
-        self.memory_value_font = (self.code_font_family, self.ui_font_size)
 
         self.simulator = Simulator16Bit()
 
@@ -506,13 +506,16 @@ class App:
 
         # --- 语法高亮：定义标签名称列表 (只包含当前需要的) ---
         self.highlight_tags = [
-            'comment_tag', 'instruction_tag', 'pseudo_instruction_tag', 'register_tag'
+            'comment_tag',
+            'instruction_tag',
+            'pseudo_instruction_tag',
+            'register_tag'
         ] # 之后可以按需添加 'immediate_tag', 'label_def_tag', 'directive_tag'
 
         # 新增：断点相关初始化
         self.breakpoints = set() # 存储设置了断点的源文件行号 (1-based)
 
-        main_frame = ttk.Frame(root, padding="2")
+        main_frame = ttk.Frame(root, padding=(5, 2, 5, 5))
         main_frame.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
         root.columnconfigure(0, weight=1)
         root.rowconfigure(0, weight=1)
@@ -530,16 +533,16 @@ class App:
         ttk.Label(code_area_frame, text="汇编代码:").grid(row=0, column=0, columnspan=3, sticky=tk.W, pady=(0,5))
 
         # 行号区 (tk.Text)
-        self.line_numbers_text = tk.Text(code_area_frame, width=4, padx=1, takefocus=0, borderwidth=0,background='lightgrey', state='disabled', wrap='none',font=self.code_font,spacing1=0, spacing2=0, spacing3=0)
+        self.line_numbers_text = tk.Text(code_area_frame, width=4, padx=1, takefocus=0, borderwidth=0,background='lightgrey', state='disabled', wrap='none',font=self.actual_code_font,spacing1=0, spacing2=0, spacing3=0)
         self.line_numbers_text.grid(row=1, column=0, sticky='ns')
 
         # 新增：为行号区绑定点击事件
         self.line_numbers_text.bind("<Button-1>", self.on_line_number_click)
         # 新增：为行号区的断点标记配置一个tag
-        self.line_numbers_text.tag_configure("breakpoint_set_marker", foreground="red", font=(self.code_font_family, self.code_font_size, "bold"))
+        self.line_numbers_text.tag_configure("breakpoint_set_marker", foreground="red", font=self.actual_code_font)
 
         # 代码编辑区 (tk.Text)
-        self.code_text = tk.Text(code_area_frame, width=60, height=25, borderwidth=0, wrap='none', undo=True,font=self.code_font,spacing1=0, spacing2=0, spacing3=0)
+        self.code_text = tk.Text(code_area_frame, width=60, height=25, borderwidth=0, wrap='none', undo=True,font=self.actual_code_font,spacing1=0, spacing2=0, spacing3=0)
         self.code_text.grid(row=1, column=1, sticky='nsew')
 
         # 垂直滚动条 (tk.Scrollbar)
@@ -557,10 +560,10 @@ class App:
 
         # 语法高亮：配置标签颜色和字体
         # 注释：绿色斜体（italic） 指令：蓝色加粗（bold)  寄存器：红色
-        self.code_text.tag_configure('comment_tag', foreground='green', font=(self.code_font_family, self.code_font_size,'italic'))
-        self.code_text.tag_configure('instruction_tag', foreground='blue', font=(self.code_font_family, self.code_font_size,'bold'))
-        self.code_text.tag_configure('pseudo_instruction_tag', foreground='blue', font=(self.code_font_family, self.code_font_size,'bold')) # 深蓝
-        self.code_text.tag_configure('register_tag', foreground='red', font=(self.code_font_family, self.code_font_size))
+        self.code_text.tag_configure('comment_tag', foreground='green', font=self.actual_code_font)
+        self.code_text.tag_configure('instruction_tag', foreground='blue', font=self.actual_code_font)
+        self.code_text.tag_configure('pseudo_instruction_tag', foreground='blue',font=self.actual_code_font) # 深蓝
+        self.code_text.tag_configure('register_tag', foreground='red', font=self.actual_code_font)
         # 如果以后添加其他高亮:
         # self.code_text.tag_configure('immediate_tag', foreground='dark orange', font=self.code_font)
         # self.code_text.tag_configure('label_def_tag', foreground='dark red', font=(self.code_font_family, self.code_font_size, 'bold'))
@@ -570,10 +573,14 @@ class App:
         # on_text_change 会调用 _schedule_highlighting
         self.code_text.bind('<KeyRelease>', self.on_text_change)
         self.code_text.bind("<<Modified>>", self.on_text_modified)
-        self.code_text.bind('<MouseWheel>', self._on_mousewheel_scroll)
-        self.code_text.bind('<Button-4>', self._on_mousewheel_scroll)
-        self.code_text.bind('<Button-5>', self._on_mousewheel_scroll)
+        self.code_text.bind('<MouseWheel>', self._on_unified_mousewheel_scroll)
+        self.code_text.bind('<Button-4>', self._on_unified_mousewheel_scroll)
+        self.code_text.bind('<Button-5>', self._on_unified_mousewheel_scroll)
 
+        # 为行号区绑定鼠标滚轮事件到同一个统一处理方法
+        self.line_numbers_text.bind('<MouseWheel>', self._on_unified_mousewheel_scroll)
+        self.line_numbers_text.bind('<Button-4>', self._on_unified_mousewheel_scroll)
+        self.line_numbers_text.bind('<Button-5>', self._on_unified_mousewheel_scroll)
 
         # 控制按钮和状态栏
         # 按钮放在 code_area_frame 下方
@@ -648,7 +655,7 @@ class App:
 
         # 新增：内存显示文本区 (tk.Text)
         self.memory_display_text = tk.Text(self.mem_frame, wrap='none', undo=False, # undo通常对显示区不需要
-                                           font=self.memory_value_font, # 使用之前定义的等宽字体
+                                           font=self.actual_code_font, # 使用之前定义的等宽字体
                                            width=25) # 初始宽度，可以调整
         self.memory_display_text.grid(row=0, column=0, sticky='nsew')
 
@@ -672,8 +679,7 @@ class App:
         self._highlight_job = None
         self.is_running_continuously = False # For continuous run
         self._continuous_run_job = None    # For continuous run
-        self.update_ui_state()
-        self.update_line_numbers() # 初始加载行号
+
 
         self._highlight_job = None # 用于延迟高亮
 
@@ -704,50 +710,14 @@ class App:
         else:
             self.highlight_patterns = {}; self.highlight_order = []
 
-        self.update_ui_state()
-        self.update_line_numbers()
+
         self._redraw_line_numbers()
         if hasattr(self, 'apply_syntax_highlighting'):
             self.apply_syntax_highlighting()
 
-        # --- 语法高亮：定义正则表达式 ---
-        self.opcodes = list(pse.opcode_map.keys()) # 真实指令
-        self.pseudo_opcodes = ['li', 'la', 'j', 'bge'] # 你定义的伪指令
-
-        # (?i) 表示不区分大小写, \b 表示单词边界
-        instructions_pattern = r"\b(" + "|".join(self.opcodes) + r")\b"
-        pseudo_instructions_pattern = r"\b(" + "|".join(self.pseudo_opcodes) + r")\b"
-
-        register_names = list(pse.register_alias.keys())
-        generic_regs_pattern_core = r"r(?:[0-9]|1[0-5])" # 核心匹配 r0-r15，不含 \b 和捕获组括号
-        # 或者保持原来的 generic_regs_pattern[2:-2] 也可以，它会是 (r(?:[0-9]|1[0-5]))
-
-        sorted_reg_names = sorted(register_names, key=len, reverse=True)
-        # 修改点: 移除模式字符串中的 (?i)
-        # 同时确保 generic_regs_pattern_core 不引入额外的捕获组括号，除非必要
-        # 我们用 generic_regs_pattern[2:-2] 来获取核心部分，它已经是带括号的
-        _generic_regs_pattern_str = r"\b(r(?:[0-9]|1[0-5]))\b" # 原来的定义
-        core_generic_part = _generic_regs_pattern_str[2:-2] # 这会是 "(r(?:[0-9]|1[0-5]))"
-
-        all_registers_pattern = r"\b(" + "|".join(sorted_reg_names) + r"|" + core_generic_part + r")\b"
-
-        self.highlight_patterns = {
-            'comment_tag': r"(#|//)[^\n]*", # 注释通常是大小写敏感的，但 re.IGNORECASE 对它影响不大
-            'instruction_tag': instructions_pattern,
-            'pseudo_instruction_tag': pseudo_instructions_pattern,
-            'register_tag': all_registers_pattern,
-        }
-        # 高亮顺序：注释最先，然后是指令，然后是寄存器
-        self.highlight_order = [
-            'comment_tag', 'instruction_tag', 'pseudo_instruction_tag', 'register_tag'
-        ]
-
-
-
         # --- 初始化UI状态和首次加载 ---
         self.update_ui_state()      # 调用 _update_current_line_highlight
         self.update_line_numbers()
-        self.apply_syntax_highlighting() # 初始加载一次高亮
 
         hardcoded_filepath = "D:/UESTC/2.2/ZhongShe/assembler_py/src/program.txt"
 
@@ -906,9 +876,41 @@ class App:
         if hasattr(self, '_schedule_highlighting'):
             self._schedule_highlighting() # 更新高亮
 
+    # def print_line_metrics_debug(self):
+    #     print("\n--- 开始行度量信息调试 (当前版本代码) ---")
+    #     try:
+    #         print(f"行号区 (line_numbers_text) 实际字体: {self.line_numbers_text.cget('font')}")
+    #         print(f"代码区 (code_text) 实际字体: {self.code_text.cget('font')}")
+    #         for i in range(1, 4):
+    #             print(f"  行号区 spacing{i}: {self.line_numbers_text.cget(f'spacing{i}')}")
+    #             print(f"  代码区 spacing{i}: {self.code_text.cget(f'spacing{i}')}")
+    #         print(f"  行号区 padx: {self.line_numbers_text.cget('padx')}, pady: {self.line_numbers_text.cget('pady')}")
+    #         print(f"  代码区 padx: {self.code_text.cget('padx')}, pady: {self.code_text.cget('pady')}")
+    #         print(f"  行号区 borderwidth: {self.line_numbers_text.cget('borderwidth')}")
+    #         print(f"  代码区 borderwidth: {self.code_text.cget('borderwidth')}")
+    #     except tk.TclError as e:
+    #         print(f"获取 cget 配置时出错: {e}")
+    #
+    #     for line_num_1_based in range(1, 6):
+    #         line_index_tk = f"{line_num_1_based}.0"
+    #         ln_bbox_info = "不可用或行不存在"
+    #         ct_bbox_info = "不可用或行不存在"
+    #         try:
+    #             if self.line_numbers_text.compare(line_index_tk, "<", self.line_numbers_text.index("end")):
+    #                 bbox = self.line_numbers_text.dlineinfo(line_index_tk)
+    #                 if bbox: ln_bbox_info = f"y={bbox[1]}, height={bbox[3]}, baseline={bbox[4]}"
+    #         except tk.TclError as e: ln_bbox_info = f"TclError: {e}"
+    #         try:
+    #             if self.code_text.compare(line_index_tk, "<", self.code_text.index("end")):
+    #                 bbox = self.code_text.dlineinfo(line_index_tk)
+    #                 if bbox: ct_bbox_info = f"y={bbox[1]}, height={bbox[3]}, baseline={bbox[4]}"
+    #         except tk.TclError as e: ct_bbox_info = f"TclError: {e}"
+    #         print(f"\n第 {line_num_1_based} 行:")
+    #         print(f"  行号区: {ln_bbox_info}")
+    #         print(f"  代码区: {ct_bbox_info}")
+    #     print("--- 行度量信息调试结束 ---\n")
 
     def load_file(self, filepath=None):
-
     # 加载汇编文件到代码编辑区。
     # 如果提供了 filepath 参数，则直接加载该文件。否则，弹出文件选择对话框。
 
@@ -932,6 +934,10 @@ class App:
                     self.apply_syntax_highlighting()
                 # 成功加载并高亮后，可以考虑自动汇编 (可选)
                 # self.assemble_code()
+
+                # 调试
+                self.print_line_metrics_debug()
+
             except FileNotFoundError:
                 self.status_label.config(text=f"错误: 文件未找到 '{chosen_filepath}'")
             except Exception as e:
@@ -1009,19 +1015,33 @@ class App:
         self.code_text.yview(*args)
         self.line_numbers_text.yview(*args)
 
-    def _on_mousewheel_scroll(self, event):
-        # 处理代码编辑区的鼠标滚轮事件，并同步行号区
-        if event.num == 4:
-            self.code_text.yview_scroll(-1, "units")
-            self.line_numbers_text.yview_scroll(-1, "units")
-        elif event.num == 5:
-            self.code_text.yview_scroll(1, "units")
-            self.line_numbers_text.yview_scroll(1, "units")
-        elif hasattr(event, 'delta') and event.delta != 0:
-            scroll_amount = -1 if event.delta > 0 else 1
-            self.code_text.yview_scroll(scroll_amount, "units")
-            self.line_numbers_text.yview_scroll(scroll_amount, "units")
-        return "break" # 阻止事件进一步传播导致可能的双重滚动
+    def _on_unified_mousewheel_scroll(self, event):
+        """
+统一处理代码区和行号区的鼠标滚轮事件。
+该方法会滚动主代码编辑区 self.code_text。
+行号区的同步将通过 self.code_text 的 yscrollcommand 触发的 _on_text_scroll 方法完成。
+        """
+        delta_scroll = 0
+        if event.num == 4:  # Linux 向上滚动
+            delta_scroll = -1
+        elif event.num == 5:  # Linux 向下滚动
+            delta_scroll = 1
+        elif hasattr(event, 'delta') and event.delta != 0:  # Windows 和 macOS
+            # event.delta 通常是 +120 (向下) 或 -120 (向上)
+            delta_scroll = -1 * (event.delta // 120) # 标准化为 +1 (向下) 或 -1 (向上)
+
+        if delta_scroll != 0:
+            self.code_text.yview_scroll(delta_scroll, "units")
+            # 当 self.code_text.yview_scroll 被调用后，
+            # 它配置的 yscrollcommand (即 self._on_text_scroll) 会被触发。
+            # self._on_text_scroll 方法会负责更新滚动条并将 self.line_numbers_text 同步滚动。
+            # self._on_text_scroll 内容:
+            #   self.v_scrollbar.set(*args)
+            #   self.line_numbers_text.yview_moveto(args[0])
+            # 所以这里不需要额外的同步调用。
+
+        return "break" # 阻止事件的默认行为，防止可能的双重滚动或意外行为
+
 
     def update_line_numbers(self, event=None):
         # 更新行号区域的显示
