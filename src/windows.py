@@ -360,28 +360,40 @@ class Simulator16Bit:
         return val
 
     def step(self):
+        # 执行单步操作。
+        # 如果成功执行一条指令，则返回 True。如果模拟器已停止或无法执行，则返回 False。
+
+        # 1. 执行前检查状态
         if self.halted:
-            print("Cannot step, simulator halted.")
+            print("模拟器已停止，无法单步执行。")
             return False
 
-        if not (0 <= self.pc < len(self.memory) and self.memory[self.pc] != "0000000000000000"): # Halt on all zeros if desired
-            # 检查是否超出了加载的机器码或明确停止
-            num_meaningful_opcodes = 0
-            for op_ in self.machine_code:
-                if op_ != "0000_0000_0000_0000":
-                    num_meaningful_opcodes +=1
-            if self.pc >= num_meaningful_opcodes: # 或 self.pc >= len(self.machine_code)
-                print(f"Halted: PC ({self.pc}) reached end of program or zeroed memory.")
-                self.halted = True
-                return False
+        # 检查PC是否越界或指向了全0的无效指令区域
+        # (假设程序结束或无效区域用全0指令表示)
+        if not (0 <= self.pc < len(self.memory) and self.memory[self.pc] != "0000000000000000"):
+            self.halted = True
+            print(f"模拟器在 PC={self.pc} 处停止 (PC越界或遇到无效指令).")
+            return False
 
+        # 2. 获取并执行指令
         instruction = self.fetch()
         if instruction:
+            # decode_and_execute 会在内部处理执行，并可能在出错时设置 self.halted = True
             self.decode_and_execute(instruction)
-            self.print_regs() # 用于调试
+
+            # 3. 返回正确的状态
+            # 只要 fetch 成功，我们就认为这一步是“尝试过”的。
+            # simulator 是否应该继续，取决于执行后 self.halted 的状态。
+            # step() 的返回值应该表明“本次step是否成功启动”。
+            # decode_and_execute 出错会设置 halted，但本次 step 本身是成功发起的。
+            # 为了让主循环的逻辑更清晰，在这里直接检查 halted 状态。
+            if self.halted:
+                return False # 如果 decode_and_execute 内部导致了停止，则返回 False
+            else:
+                return True # 否则，成功执行一步，返回 True
         else:
+            # Fetch 失败通常意味着PC有问题
             self.halted = True
-            print("Halted: Fetch failed or PC out of bounds.")
             return False
 
     def run_program(self, max_steps=1000): # 添加 max_steps 防无限循环
@@ -1147,7 +1159,7 @@ class App:
 
         self.is_running_continuously = True
 
-
+        # print(f"--- DEBUG: run_code - 'is_running_continuously' 设置为 {self.is_running_continuously} ---")
 
         self.status_label.config(text="正在连续执行...")
         self._update_button_states() # 立即禁用“执行”、“单步”等，启用“停止”
@@ -1155,6 +1167,8 @@ class App:
 
 
     def _execute_next_instruction_in_run_mode(self):
+        # print(f"--- DEBUG: 进入 _execute_next... - is_running: {self.is_running_continuously}, halted: {self.simulator.halted} ---")
+
         # 1. 检查是否应该停止连续执行 (由用户点击停止、模拟器已停止、或断点触发)
         if not self.is_running_continuously or self.simulator.halted:
             self.is_running_continuously = False # 确保标志位正确
@@ -1194,6 +1208,9 @@ class App:
             if source_line_num in self.breakpoints:
                 # 命中断点！
                 self.is_running_continuously = False # 停止连续运行
+
+                # print(f"--- DEBUG: 断点命中! - 'is_running_continuously' 设置为 {self.is_running_continuously} ---")
+
                 self.status_label.config(text=f"在断点处暂停: 第 {source_line_num} 行 (PC={current_pc})")
 
                 self._update_button_states() # 更新按钮状态（启用"单步"、"执行"等）
@@ -1207,6 +1224,9 @@ class App:
         # simulator.step() 会执行指令并更新PC。如果执行后出错或结束，它会返回 False。
         if not self.simulator.step():
             self.is_running_continuously = False # 模拟器内部停止了
+
+            # print(f"--- DEBUG: simulator.step() 返回 False - 'is_running_continuously' 设置为 {self.is_running_continuously} ---")
+
             # 状态将在下一次调用此函数开头的 if 块中被处理和更新
             # 为了立即响应，我们也可以在这里直接处理
             self.status_label.config(text="模拟器执行时遇到错误或结束。")
@@ -1218,14 +1238,21 @@ class App:
         self.update_ui_state() # 更新寄存器、PC、内存、高亮行等
 
         # 再次检查，以防 step() 操作改变了状态 (例如，执行了最后一条指令)
+        # print(f"--- DEBUG: 准备安排下一次 after() - is_running: {self.is_running_continuously}, halted: {self.simulator.halted} ---")
+
         if self.is_running_continuously and not self.simulator.halted:
             delay_ms = 50  # 执行速度控制 (毫秒)，你可以调小这个值让它跑得更快
             self._continuous_run_job = self.root.after(delay_ms, self._execute_next_instruction_in_run_mode)
+        # else:
+        #     print(f"--- DEBUG: 循环终止 - is_running: {self.is_running_continuously}, halted: {self.simulator.halted} ---")
 
     def stop_continuous_run(self):
         if self.is_running_continuously:
             self.status_label.config(text="已手动停止连续执行.")
         self.is_running_continuously = False
+
+        # print(f"--- DEBUG: stop_continuous_run - 'is_running_continuously' 设置为 {self.is_running_continuously} ---")
+
         if self._continuous_run_job:
             self.root.after_cancel(self._continuous_run_job)
             self._continuous_run_job = None
