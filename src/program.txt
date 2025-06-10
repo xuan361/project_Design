@@ -15,7 +15,7 @@ move_loop:             // 循环移动数据，数据通过a5寄存器进行传�
     sb a5, 0(a4)
     addi a3, a3, 1
     addi a4, a4, 1
-    ble a3, a2, move_loop
+    ble a4, a2, move_loop
 
 begin:
     addi a4, a2, -1 // a6的截止地点

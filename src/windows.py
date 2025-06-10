@@ -4,6 +4,65 @@ import re
 import time
 import pseudo as pse
 
+def resolve_labels(expanded_lines, label_map):
+    resolved = []
+    for idx, line in enumerate(expanded_lines):
+        processed_line_for_tokens = line.replace(',', '').replace('(', ' ').replace(')', '')
+        tokens = processed_line_for_tokens.split()
+
+        if not tokens:
+            continue
+
+        instr = tokens[0]
+
+        # 我们只关心跳转和分支指令中的标签解析
+        if instr in ['ble', 'beq', 'jal']:
+            # 这里的判断条件可能需要根据你的指令格式微调，但核心逻辑是找到最后一个参数
+            if len(tokens) < 2: # 至少需要指令和1个参数
+                resolved.append(line)
+                continue
+
+            last_arg = tokens[-1]
+            try:
+                # 如果最后一个参数已经是数字，则不是标签，直接使用
+                int(last_arg, 0)
+                resolved.append(line)
+            except ValueError:
+                # 最后一个参数不是数字，我们认为它是需要解析的标签
+                label_name = last_arg
+                if label_name not in label_map:
+                    raise KeyError(f"错误: 未定义的标签 '{label_name}' 在指令中被使用: '{line}' (在扩展后指令列表的索引 {idx})")
+
+                # --- 核心修正点 ---
+                # 使用标签映射中正确的PC地址，不再加1
+                target_pc_index = label_map[label_name]
+
+                current_pc_index = idx
+                offset = target_pc_index - current_pc_index - 1
+
+                temp_tokens = tokens[:-1] + [str(offset)]
+                resolved.append(' '.join(temp_tokens))
+
+        # `la` 伪指令展开成的 `lui` 指令也需要解析标签
+        elif instr == 'lui':
+            if len(tokens) < 3:
+                raise ValueError(f"格式错误的 LUI 指令: '{line}' at expanded index {idx}")
+
+            immediate_or_label_arg = tokens[2]
+            if immediate_or_label_arg in label_map:
+                label_value = label_map[immediate_or_label_arg]
+                temp_tokens = list(tokens)
+                temp_tokens[2] = f'0x{label_value:X}' # 替换为十六进制地址
+                resolved.append(' '.join(temp_tokens))
+            else:
+                resolved.append(line) # 如果不是标签，直接通过
+        else:
+            # 其他所有指令直接通过
+            resolved.append(line)
+
+    return resolved
+
+
 class Simulator16Bit:
     def __init__(self):
         self.registers = [0] * 16  # r0 to r15
@@ -54,7 +113,7 @@ class Simulator16Bit:
             expanded_instr, self.label_map, data_lma_values, source_lines_for_expanded = pse.expand_pseudo_instructions(asm_lines)
 
            # 2. 解析标签
-            resolved_instr = pse.resolve_labels(expanded_instr, self.label_map)
+            resolved_instr = resolve_labels(expanded_instr, self.label_map)
             # print(f"Resolved: {resolved_instr}")
 
             self.pc_to_source_line_map = source_lines_for_expanded # 存储映射
@@ -1241,7 +1300,7 @@ class App:
         # print(f"--- DEBUG: 准备安排下一次 after() - is_running: {self.is_running_continuously}, halted: {self.simulator.halted} ---")
 
         if self.is_running_continuously and not self.simulator.halted:
-            delay_ms = 50  # 执行速度控制 (毫秒)，你可以调小这个值让它跑得更快
+            delay_ms = 50  # 执行速度控制 (毫秒)
             self._continuous_run_job = self.root.after(delay_ms, self._execute_next_instruction_in_run_mode)
         # else:
         #     print(f"--- DEBUG: 循环终止 - is_running: {self.is_running_continuously}, halted: {self.simulator.halted} ---")
