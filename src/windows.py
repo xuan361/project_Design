@@ -13,6 +13,10 @@ class Simulator16Bit:
         self.machine_code = [] # 在加载到内存之前存储汇编代码
         self.label_map = {}
         self.pc_to_source_line_map = [] # 存储PC到源码行的映射
+
+        self.OPCODE_MAP = pse.opcode_map
+        self.REGISTER_ALIAS = pse.register_alias
+
         # 将 r0 初始化为 0
         self.registers[register_alias['r0']] = 0
 
@@ -159,255 +163,193 @@ class Simulator16Bit:
         return instruction_word # Should be "XXXXXXXXXXXXXXXX"
 
     def decode_and_execute(self, instruction_word):
-
-        #解码并执行单个 16 位指令字（字符串）（需要为每条指令实现逻辑）
-
-        if instruction_word is None or len(instruction_word) != 16:
+        """
+解码并执行单条16位指令字 (字符串格式 "XXXXXXXXXXXXXXXX")。
+此方法的解码逻辑严格对应于 pseudo.py 中 assemble_line 的编码逻辑。
+        """
+        if instruction_word is None or len(instruction_word) != 16 or \
+        not all(c in '01' for c in instruction_word):
             self.halted = True
-            print(f"Invalid instruction word: {instruction_word} at PC={self.pc}")
+            print(f"错误: 无效的指令字 '{instruction_word}' 在 PC={self.pc}")
             return
 
-        # 从 pseudo.py 导入的 opcode_map
-
-        # (在 __init__ 中存为 self.OPCODE_MAP)
-        # 不是，这对吗?等下检查一下？
-
-
-        # R-type (add,sub,and,or): rs2(4) rs1(4) rd(4) opcode(4) -> instr[0:4] instr[4:8] instr[8:12] instr[12:16]
-        # I-type (addi,subi,jalr):imm(4) rs1(4) rd(4) opcode(4) -> instr[0:4] instr[4:8] instr[8:12] instr[12:16]
-        # I-type (lb,lw):        imm(4) rs1(4) rd(4) opcode(4) -> instr[0:4] instr[4:8] instr[8:12] instr[12:16]
-        # S-type (sb,sw):        rt(4)  rs1(4) imm(4) opcode(4) -> instr[0:4] instr[4:8] instr[8:12] instr[12:16] (rt是源, rs1是基址)
-        # SB-type (beq,ble):     rs2(4) rs1(4) imm(4) opcode(4) -> instr[0:4] instr[4:8] instr[8:12] instr[12:16]
-        # U-type (lui):          imm(8)        rd(4) opcode(4) -> instr[0:8] instr[8:12] instr[12:16]
-        # UJ-type (jal):         imm(8)        rd(4) opcode(4) -> instr[0:8] instr[8:12] instr[12:16]
-
-
-        opcode = instruction_word[-4:] # Last 4 bits are opcode in your assembler
-        # print(f"  Opcode: {opcode}")
-        next_pc = self.pc + 1 # Default next PC
+        # 默认情况下，PC指向下一条指令
+        next_pc = self.pc + 1
 
         try:
-            # R-type: rs2(4) rs1(4) rd(4) opcode(4) e.g. add, sub, and, or
-            if opcode in [opcode_map['add'], opcode_map['sub'], opcode_map['and'], opcode_map['or']]:
-                rd_bin = instruction_word[8:12]
-                rs1_bin = instruction_word[4:8]
+            # 字段解析顺序与 assemble_line 的拼接顺序相反
+            # instr[0:...] 是高位, instr[...:16] 是低位
+            # Opcode 总是最后4位 (bits 3-0)
+            opcode = instruction_word[12:16]
+
+            # --- R-type: add, sub, and, or ---
+            # 格式(编码): rs2(4) + rs1(4) + rd(4) + opcode(4)
+            if opcode in [self.OPCODE_MAP['add'], self.OPCODE_MAP['sub'], self.OPCODE_MAP['and'], self.OPCODE_MAP['or']]:
                 rs2_bin = instruction_word[0:4]
+                rs1_bin = instruction_word[4:8]
+                rd_bin  = instruction_word[8:12]
                 rd = int(rd_bin, 2)
                 rs1_val = self.get_reg_value(int(rs1_bin, 2))
                 rs2_val = self.get_reg_value(int(rs2_bin, 2))
 
                 result = 0
-                if opcode == opcode_map['add']: result = rs1_val + rs2_val
-                elif opcode == opcode_map['sub']: result = rs1_val - rs2_val
-                elif opcode == opcode_map['and']: result = rs1_val & rs2_val
-                elif opcode == opcode_map['or']:  result = rs1_val | rs2_val
+                if opcode == self.OPCODE_MAP['add']: result = rs1_val + rs2_val
+                elif opcode == self.OPCODE_MAP['sub']: result = rs1_val - rs2_val
+                elif opcode == self.OPCODE_MAP['and']: result = rs1_val & rs2_val
+                elif opcode == self.OPCODE_MAP['or']:  result = rs1_val | rs2_val
                 self.set_reg_value(rd, result)
-                # print(f"  R-Type: op={opcode} rd={rd} rs1_val={rs1_val} rs2_val={rs2_val} -> result={result}")
 
-            # I-type (addi, subi): imm(4) rs1(4) rd(4) opcode(4)
-            elif opcode in [opcode_map['addi'], opcode_map['subi']]:
-                rd_bin = instruction_word[8:12]
+            # --- I-type (算术/逻辑): addi, subi ---
+            # 格式(编码): imm(4) + rs1(4) + rd(4) + opcode(4)
+            elif opcode in [self.OPCODE_MAP['addi'], self.OPCODE_MAP['subi']]:
+                imm_bin = instruction_word[0:4]
                 rs1_bin = instruction_word[4:8]
-                imm_bin_val = instruction_word[0:4]
+                rd_bin  = instruction_word[8:12]
                 rd = int(rd_bin, 2)
                 rs1_val = self.get_reg_value(int(rs1_bin, 2))
-                imm = self.signed_int(imm_bin_val, 4) # Convert 4-bit 2's complement to int
+                imm_val = self.signed_int(imm_bin, 4) # 4位有符号立即数
 
                 result = 0
-                if opcode == opcode_map['addi']: result = rs1_val + imm
-                elif opcode == opcode_map['subi']: result = rs1_val - imm # Your ISA has subi
+                if opcode == self.OPCODE_MAP['addi']: result = rs1_val + imm_val
+                elif opcode == self.OPCODE_MAP['subi']: result = rs1_val - imm_val
                 self.set_reg_value(rd, result)
-                # print(f"  I-Type (addi/subi): op={opcode} rd={rd} rs1_val={rs1_val} imm={imm} -> result={result}")
 
-
-            # I-type (Load: lb, lw): imm(4) rs1(4) rd(4) opcode(4)
-            elif opcode in [opcode_map['lb'], opcode_map['lw']]:
-                rd_bin = instruction_word[8:12]
-                rs1_bin = instruction_word[4:8] # base register
-                imm_bin_val = instruction_word[0:4] # offset
+            # --- I-type (加载): lw, lb ---
+            # 格式(编码): imm(4) + rs1(4) + rd(4) + opcode(4)
+            elif opcode in [self.OPCODE_MAP['lw'], self.OPCODE_MAP['lb']]:
+                imm_bin = instruction_word[0:4]
+                rs1_bin = instruction_word[4:8]
+                rd_bin  = instruction_word[8:12]
                 rd = int(rd_bin, 2)
                 base_addr = self.get_reg_value(int(rs1_bin, 2))
-                offset = self.signed_int(imm_bin_val, 4)
-                mem_addr = (base_addr + offset) & 0xFFFF # Memory addresses are 16-bit
+                offset = self.signed_int(imm_bin, 4)
+                mem_addr = (base_addr + offset) & 0xFFFF # 16位字节地址
 
-                if not (0 <= mem_addr < len(self.memory)): # Check word address for lw
-                    print(f"Memory access out of bounds: addr={mem_addr} (word)")
-                    self.halted = True; return
-
-                if opcode == opcode_map['lw']:
-                    # Assuming memory stores 16-bit words as binary strings "XXXXXXXXXXXXXXXX"
-                    word_data_str = self.memory[mem_addr]
+                if opcode == self.OPCODE_MAP['lw']:
+                    if mem_addr % 2 != 0: # lw 地址必须是偶数 (对齐到字)
+                        print(f"警告: LW 地址不对齐 PC={self.pc:04X}, Addr={mem_addr:04X}")
+                    word_addr = mem_addr // 2
+                    if not (0 <= word_addr < len(self.memory)):
+                        print(f"错误: LW 地址越界 PC={self.pc:04X}, Addr={word_addr:04X}")
+                        self.halted = True; return
+                    word_data_str = self.memory[word_addr]
                     loaded_val = int(word_data_str, 2)
                     self.set_reg_value(rd, loaded_val)
-                    # print(f"  LW: rd={rd} addr={mem_addr} (from base={base_addr}, off={offset}) val_str={word_data_str} -> val={loaded_val}")
-                elif opcode == opcode_map['lb']:
-                    # lb: load byte from memory address mem_addr, sign-extend to 16 bits
-                    # Memory stores 16-bit words. We need to figure out byte addressing.
-                    # Assuming word-aligned memory. If mem_addr is byte address:
-                    word_addr = mem_addr // 2
-                    byte_offset_in_word = mem_addr % 2 # 0 for high byte, 1 for low byte (or vice versa)
 
-                    if not (0 <= word_addr < len(self.memory)):
-                        print(f"Memory access out of bounds for LB: addr={mem_addr} (byte), word_addr={word_addr}")
-                        self.halted = True; return
-
-                    word_data_str = self.memory[word_addr] # "HHLLLLLLHHHHHHHH"
-                    byte_val = 0
-                    if byte_offset_in_word == 0: # Assuming high byte is at the lower address (Big Endian like)
-                        # or if it's little endian and word is [Byte1 Byte0] then mem_addr points to Byte0.
-                        # Your `_data_lma` format: `byte1_byte2`.
-                        # If memory[idx] = "B1B1B1B1B1B1B1B1B0B0B0B0B0B0B0B0"
-                        # and byte1 is at lower address:
-                        byte_str = word_data_str[0:8] # Higher byte in the string
-                    else: # byte_offset_in_word == 1
-                        byte_str = word_data_str[8:16] # Lower byte in the string
-
-                    loaded_byte = self.signed_int(byte_str, 8) # Sign extend from 8 to 16 bits
-                    self.set_reg_value(rd, loaded_byte)
-                    # print(f"  LB: rd={rd} byte_addr={mem_addr} word_addr={word_addr} byte_off={byte_offset_in_word} byte_str={byte_str} -> val={loaded_byte}")
-
-
-            # S-type (Store: sb, sw): rt(4) rs1(4) imm(4) opcode(4) (Your format was rt,rs,imm,op)
-            # rt is source reg (rs2 in standard), rs1 is base reg
-            elif opcode in [opcode_map['sb'], opcode_map['sw']]:
-                imm_bin_val = instruction_word[8:12] # Your assembler puts imm here for S-type like
-                rs1_bin = instruction_word[4:8]      # Base register
-                rt_bin = instruction_word[0:4]       # Source register rt (value to store)
-
-                rt_val = self.get_reg_value(int(rt_bin, 2))
-                base_addr = self.get_reg_value(int(rs1_bin, 2))
-                offset = self.signed_int(imm_bin_val, 4)
-                mem_addr = (base_addr + offset) & 0xFFFF
-
-                if not (0 <= mem_addr < len(self.memory)): # Check word address for sw
-                    print(f"Memory access out of bounds: addr={mem_addr} (word)")
-                    self.halted = True; return
-
-                if opcode == opcode_map['sw']:
-                    # Store 16-bit word rt_val into memory[mem_addr]
-                    self.memory[mem_addr] = format(rt_val & 0xFFFF, '016b')
-                    # print(f"  SW: rt_val={rt_val} to addr={mem_addr} (from base={base_addr}, off={offset})")
-                elif opcode == opcode_map['sb']:
-                    # sb: store byte (lower 8 bits of rt_val) to memory address mem_addr
+                elif opcode == self.OPCODE_MAP['lb']:
                     word_addr = mem_addr // 2
                     byte_offset_in_word = mem_addr % 2
-
                     if not (0 <= word_addr < len(self.memory)):
-                        print(f"Memory access out of bounds for SB: addr={mem_addr} (byte), word_addr={word_addr}")
+                        print(f"错误: LB 地址越界 PC={self.pc:04X}, Addr={word_addr:04X}")
                         self.halted = True; return
+                    word_data_str = self.memory[word_addr]
+                    byte_str = word_data_str[0:8] if byte_offset_in_word == 0 else word_data_str[8:16]
+                    loaded_byte_signed = self.signed_int(byte_str, 8) # 字节加载后符号扩展
+                    self.set_reg_value(rd, loaded_byte_signed)
 
-                    byte_to_store_str = format(rt_val & 0xFF, '08b') # Lower 8 bits
-                    current_word_str = self.memory[word_addr]
-                    new_word_str = ""
-                    if byte_offset_in_word == 0: # High byte
-                        new_word_str = byte_to_store_str + current_word_str[8:16]
-                    else: # Low byte
-                        new_word_str = current_word_str[0:8] + byte_to_store_str
-                    self.memory[word_addr] = new_word_str
-                    # print(f"  SB: rt_val_byte={byte_to_store_str} to byte_addr={mem_addr} (word_addr={word_addr}, byte_off={byte_offset_in_word})")
-
-
-            # U-type (lui): imm(8) rd(4) opcode(4)
-            elif opcode == opcode_map['lui']:
-                rd_bin = instruction_word[8:12]
-                imm_bin_val = instruction_word[0:8] # 8-bit immediate
-                rd = int(rd_bin, 2)
-                imm = int(imm_bin_val, 2) # LUI imm is usually treated as unsigned upper bits
-                # LUI typically does rd = imm << (some_shift_amount, e.g., 12 in RV32)
-                # Your LUI seems to just load the 8-bit imm into rd, then addi handles lower bits.
-                # If `li rX, 0xABCD` -> `lui rX, 0xAB` then `addi rX, rX, 0xC` then `addi rX, rX, 0xD`.
-                # So, `lui rX, 0xAB` means `rX = 0xAB00` effectively, or just loads 0xAB and expects addi.
-                # Based on your `li` expansion, `lui` puts `upper_8_bits` into the register,
-                # which implies these are the *upper* bits of the target value.
-                # So, `lui rd, val` should result in `rd = val << 8` if it's a 16-bit system.
-                # Let's assume `val` is placed directly, and `addi` will shift. No, `addi` just adds.
-                # So, `lui rd, imm_val` should place `imm_val << 8` into `rd`.
-                # The `assemble_line` for `lui` takes `imm_val` (0-255) and formats it as `08b`.
-                # The `li` pseudo-instruction: `lui rd, upper_8_bits`. This `upper_8_bits` is `(target_val >> 8) & 0xFF`.
-                # So if `target_val` is `0xABCD`, `upper_8_bits` is `0xAB`.
-                # `lui rd, 0xAB` should make `rd = 0xAB00`.
-                self.set_reg_value(rd, imm << 8)
-                # print(f"  LUI: rd={rd} imm_raw={imm} -> val={imm << 8}")
-
-            # SB-type (beq, ble): rs2(4) rs1(4) imm(4) opcode(4)
-            # Your assembler: rs2 + rs1 + imm + opcode
-            elif opcode in [opcode_map['beq'], opcode_map['ble']]:
-                imm_bin_val = instruction_word[8:12]
+            # --- S-type (存储): sw, sb ---
+            # 格式(编码): rt(rs2,源) + rs1(基址) + imm(4) + opcode(4)
+            elif opcode in [self.OPCODE_MAP['sw'], self.OPCODE_MAP['sb']]:
+                rt_bin  = instruction_word[0:4]
                 rs1_bin = instruction_word[4:8]
-                rs2_bin = instruction_word[0:4]
+                imm_bin = instruction_word[8:12]
+                rt_val = self.get_reg_value(int(rt_bin, 2))
+                base_addr = self.get_reg_value(int(rs1_bin, 2))
+                offset = self.signed_int(imm_bin, 4)
+                mem_addr = (base_addr + offset) & 0xFFFF
 
+                if opcode == self.OPCODE_MAP['sw']:
+                    if mem_addr % 2 != 0:
+                        print(f"警告: SW 地址不对齐 PC={self.pc:04X}, Addr={mem_addr:04X}")
+                    word_addr = mem_addr // 2
+                    if not (0 <= word_addr < len(self.memory)):
+                        print(f"错误: SW 地址越界 PC={self.pc:04X}, Addr={word_addr:04X}")
+                        self.halted = True; return
+                    self.memory[word_addr] = format(rt_val & 0xFFFF, '016b')
+
+                elif opcode == self.OPCODE_MAP['sb']:
+                    word_addr = mem_addr // 2
+                    byte_offset_in_word = mem_addr % 2
+                    if not (0 <= word_addr < len(self.memory)):
+                        print(f"错误: SB 地址越界 PC={self.pc:04X}, Addr={word_addr:04X}")
+                        self.halted = True; return
+                    byte_to_store_str = format(rt_val & 0xFF, '08b') # 只取低8位
+                    current_word_str = self.memory[word_addr]
+                    new_word_str = byte_to_store_str + current_word_str[8:16] if byte_offset_in_word == 0 else current_word_str[0:8] + byte_to_store_str
+                    self.memory[word_addr] = new_word_str
+
+            # --- SB-type (分支): beq, ble ---
+            # 格式(编码): rs2(4) + rs1(4) + imm(4) + opcode(4)
+            elif opcode in [self.OPCODE_MAP['beq'], self.OPCODE_MAP['ble']]:
+                rs2_bin = instruction_word[0:4]
+                rs1_bin = instruction_word[4:8]
+                imm_bin = instruction_word[8:12]
                 rs1_val = self.get_reg_value(int(rs1_bin, 2))
                 rs2_val = self.get_reg_value(int(rs2_bin, 2))
-                # Offset is PC-relative. PC is currently pointing to this branch instruction.
-                # Target address = PC_current_branch_instr + (signed_offset * N)
-                # In many RISC ISAs, offset is for words (multiplied by 2 or 4).
-                # Your `resolve_labels` calculates offset as:
-                #   `offset = target_pc_index - current_pc_index - 1`
-                # This implies the offset is a direct instruction count.
-                # So, `next_pc = current_pc_index + 1 + offset`.
-                offset = self.signed_int(imm_bin_val, 4)
+                offset = self.signed_int(imm_bin, 4) # 4位有符号指令偏移
 
                 branch_taken = False
-                if opcode == opcode_map['beq']:
-                    if rs1_val == rs2_val: branch_taken = True
-                elif opcode == opcode_map['ble']:
-                    if rs1_val <= rs2_val: branch_taken = True # rs1 <= rs2
+                if opcode == self.OPCODE_MAP['beq'] and rs1_val == rs2_val: branch_taken = True
+                elif opcode == self.OPCODE_MAP['ble'] and rs1_val <= rs2_val: branch_taken = True
 
                 if branch_taken:
-                    next_pc = self.pc + 1 + offset # PC is current instruction, +1 for normal flow, then add offset
-                    # print(f"  BRANCH taken: op={opcode} rs1_val={rs1_val} rs2_val={rs2_val} offset={offset} -> new_pc={next_pc}")
-                # else:
-                # print(f"  BRANCH not taken: op={opcode} rs1_val={rs1_val} rs2_val={rs2_val} offset={offset}")
+                    next_pc = (self.pc + 1 + offset) & 0xFFFF
 
-
-            # UJ-type (jal): imm(8) rd(4) opcode(4)
-            # Your assembler: imm + rd + opcode
-            elif opcode == opcode_map['jal']:
-                rd_bin = instruction_word[8:12] # bits 4-7 from right
-                imm_bin_val = instruction_word[0:8] # bits 8-15 from right (most significant)
+            # --- U-type: lui ---
+            # 格式(编码): imm(8) + rd(4) + opcode(4)
+            elif opcode == self.OPCODE_MAP['lui']:
+                imm_bin = instruction_word[0:8]
+                rd_bin  = instruction_word[8:12]
                 rd = int(rd_bin, 2)
-                # JAL immediate is also an offset, similar to branches.
-                # `offset = target_pc_index - current_pc_index - 1`
-                offset = self.signed_int(imm_bin_val, 8) # 8-bit signed offset
+                imm_val = int(imm_bin, 2) # 无符号立即数
+                self.set_reg_value(rd, imm_val << 8)
 
-                if rd != 0: # Save PC+1 to rd (return address)
-                    self.set_reg_value(rd, (self.pc + 1) & 0xFFFF)
-                next_pc = self.pc + 1 + offset
-                # print(f"  JAL: rd={rd} offset={offset} -> ret_addr={(self.pc+1)&0xFFFF}, new_pc={next_pc}")
-
-
-            # I-type (jalr): imm(4) rs1(4) rd(4) opcode(4)
-            # Your assembler: imm + rs + rd + opcode
-            elif opcode == opcode_map['jalr']:
-                rd_bin = instruction_word[8:12]
-                rs1_bin = instruction_word[4:8]
-                imm_bin_val = instruction_word[0:4]
+            # --- UJ-type: jal ---
+            # 格式(编码): imm(8) + rd(4) + opcode(4)
+            elif opcode == self.OPCODE_MAP['jal']:
+                imm_bin = instruction_word[0:8]
+                rd_bin  = instruction_word[8:12]
                 rd = int(rd_bin, 2)
-                rs1_val = self.get_reg_value(int(rs1_bin, 2))
-                offset = self.signed_int(imm_bin_val, 4)
+                offset = self.signed_int(imm_bin, 8)
 
-                target_addr = (rs1_val + offset) & 0xFFFF
                 if rd != 0:
                     self.set_reg_value(rd, (self.pc + 1) & 0xFFFF)
-                next_pc = target_addr # Jumps to target_addr
-                # print(f"  JALR: rd={rd} rs1_val={rs1_val} offset={offset} -> ret_addr={(self.pc+1)&0xFFFF}, new_pc={next_pc}")
+
+                # `resolve_labels` 中计算偏移的逻辑是 offset = target_pc - current_pc - 1
+                # （其中 target_pc 被特殊处理为 label_map[label_name] + 1）
+                # 模拟器中执行时，只需应用该偏移： next_pc = current_pc + 1 + offset
+                next_pc = (self.pc + 1 + offset) & 0xFFFF
+
+            # --- I-type: jalr ---
+            # 格式(编码): imm(4) + rs1(4) + rd(4) + opcode(4)
+            elif opcode == self.OPCODE_MAP['jalr']:
+                imm_bin = instruction_word[0:4]
+                rs1_bin = instruction_word[4:8]
+                rd_bin  = instruction_word[8:12]
+                rd = int(rd_bin, 2)
+                rs1_val = self.get_reg_value(int(rs1_bin, 2))
+                offset = self.signed_int(imm_bin, 4)
+
+                if rd != 0:
+                    self.set_reg_value(rd, (self.pc + 1) & 0xFFFF)
+
+                next_pc = (rs1_val + offset) & 0xFFFF
 
             else:
-                print(f"Unknown or unimplemented opcode: {opcode} for instruction {instruction_word}")
+                print(f"错误: 未知或未实现的操作码 '{opcode}' 在 PC={self.pc:04X}, 指令={instruction_word}")
                 self.halted = True
                 return
 
-            self.pc = next_pc
+            self.pc = next_pc # 更新PC
 
         except Exception as e:
-            print(f"Error during execution of {instruction_word} at PC={self.pc}: {e}")
+            print(f"执行错误: PC={self.pc:04X}, 指令={instruction_word}, 错误={e}")
             import traceback
             traceback.print_exc()
             self.halted = True
 
-        # Enforce r0 is always 0 after every instruction
-        self.registers[register_alias['r0']] = 0
-
+        # 确保r0始终为0
+        self.set_reg_value(0, 0) # 调用set_reg_value，它内部有对r0的保护逻辑
 
 
     def signed_int(self, binary_string, bits):
