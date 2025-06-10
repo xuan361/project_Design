@@ -7,7 +7,7 @@ import pseudo as pse
 class Simulator16Bit:
     def __init__(self):
         self.registers = [0] * 16  # r0 to r15
-        self.memory = ["0000_0000_0000_0000"] * 512 # Memory for 512 words (16-bit each)
+        self.memory = ["0000_0000_0000_0000"] * 16384 # Memory for 512 words (16-bit each)
         self.pc = 0
         self.halted = False
         self.machine_code = [] # 在加载到内存之前存储汇编代码
@@ -462,6 +462,9 @@ class App:
         root.columnconfigure(0, weight=1)
         root.rowconfigure(0, weight=1)
 
+        # 新增：用于追踪内存视图起始地址的属性
+        self.memory_view_start_addr = 0
+
         #    代码编辑区和行号区
         # 创建一个框架来容纳行号和代码文本区
         code_area_frame = ttk.Frame(main_frame)
@@ -586,24 +589,34 @@ class App:
         self.pc_label_val = ttk.Label(self.reg_frame, text="0 (0x0000)", width=18, relief=tk.GROOVE, anchor=tk.W)
         self.pc_label_val.grid(row=16, column=1, sticky=tk.W, padx=2, pady=(5,1))
 
-        ttk.Label(right_pane, text="内存视图:").grid(row=0, column=1, sticky=tk.NW, padx=(5,0), pady=(0,2)) # padx=(5,0) 在左边留一点间距
+        ttk.Label(right_pane, text="内存视图:").grid(row=0, column=1, sticky=tk.NW, padx=(5,0), pady=(0,2))
 
         self.mem_frame = ttk.Frame(right_pane) # 父组件是 right_pane
         self.mem_frame.grid(row=1, column=1, sticky='nsew', padx=(5,0)) # 占据第1行，第1列
 
         # 让 mem_frame 内部的文本区可以扩展
-        self.mem_frame.rowconfigure(0, weight=1)
+        self.mem_frame.rowconfigure(2, weight=1)
         self.mem_frame.columnconfigure(0, weight=1)
+
+        # 新增：地址跳转的UI组件
+        mem_nav_frame = ttk.Frame(self.mem_frame)
+        mem_nav_frame.grid(row=0, column=0, columnspan=2, sticky='ew', pady=(0,5))
+
+        ttk.Label(mem_nav_frame, text="地址(Hex):").pack(side=tk.LEFT, padx=(0,2))
+        self.mem_addr_entry = ttk.Entry(mem_nav_frame, width=10)
+        self.mem_addr_entry.pack(side=tk.LEFT, padx=2)
+        self.mem_addr_entry.insert(0, "1000") # 默认显示地址 0x1000
+        ttk.Button(mem_nav_frame, text="跳转", command=self.go_to_memory_address).pack(side=tk.LEFT, padx=2)
 
         # 新增：内存显示文本区 (tk.Text)
         self.memory_display_text = tk.Text(self.mem_frame, wrap='none', undo=False, # undo通常对显示区不需要
                                            font=self.actual_code_font, # 使用之前定义的等宽字体
-                                           width=25) # 初始宽度，可以调整
-        self.memory_display_text.grid(row=0, column=0, sticky='nsew')
+                                           width=27) # 初始宽度，可以调整
+        self.memory_display_text.grid(row=1, column=0, sticky='nsew')
 
         # 新增：内存显示区的垂直滚动条
         mem_v_scrollbar = ttk.Scrollbar(self.mem_frame, orient="vertical", command=self.memory_display_text.yview)
-        mem_v_scrollbar.grid(row=0, column=1, sticky='ns')
+        mem_v_scrollbar.grid(row=1, column=1, sticky='ns')
         self.memory_display_text.config(yscrollcommand=mem_v_scrollbar.set)
 
         # self.mem_labels = []
@@ -658,8 +671,9 @@ class App:
             self.apply_syntax_highlighting()
 
         # --- 初始化UI状态和首次加载 ---
-        self.update_ui_state()      # 调用 _update_current_line_highlight
+        self.update_ui_state()
         self.update_line_numbers()
+        self.go_to_memory_address()
 
         hardcoded_filepath = "D:/UESTC/2.2/ZhongShe/assembler_py/src/program.txt"
 
@@ -971,6 +985,24 @@ class App:
             self.simulator.halted = True
         self.update_ui_state() # update_ui_state 内部会调用 _update_current_line_highlight
 
+    def go_to_memory_address(self):
+        # 跳转到用户在输入框中指定的内存地址
+        addr_str = self.mem_addr_entry.get().strip()
+        try:
+            # 以16进制解析地址
+            start_addr = int(addr_str, 16)
+
+            # 确保地址在有效范围内
+            if 0 <= start_addr < len(self.simulator.memory):
+                self.memory_view_start_addr = start_addr
+                self._update_memory_view()
+                self.status_label.config(text=f"内存视图已跳转到地址 0x{start_addr:X}")
+            else:
+                self.status_label.config(text=f"错误: 地址 0x{start_addr:X} 超出内存范围")
+        except ValueError:
+            self.status_label.config(text=f"错误: 无效的十六进制地址 '{addr_str}'")
+
+
     def _on_text_scroll(self, *args):
         # 代码编辑区滚动时，用于更新滚动条位置，并同步行号区滚动
         self.v_scrollbar.set(*args)
@@ -1048,36 +1080,31 @@ class App:
         # 滚动条的位置也应该被正确设置，这由 _on_text_scroll -> self.v_scrollbar.set() 完成
 
     def _update_memory_view(self):
-        """更新内存视图文本区域的内容。"""
+        # 更新内存视图文本区域的内容
         if not hasattr(self, 'memory_display_text') or not self.memory_display_text.winfo_exists():
             return
 
-        self.memory_display_text.config(state='normal') # 允许修改
-        self.memory_display_text.delete('1.0', 'end')   # 清空旧内容
+        self.memory_display_text.config(state='normal')
+        self.memory_display_text.delete('1.0', 'end')
 
-        # 遍历模拟器的内存 (self.simulator.memory 存储的是纯二进制 "XXXXXXXXXXXXXXXX")
-        # 假设地址是16进制4位数，例如 0000, 0001, ..., 01FF (对于512字内存)
-        # 你可以根据实际内存大小调整地址格式 f"0x{addr:03X}" 或 f"0x{addr:04X}"
-        addr_width = 4 if len(self.simulator.memory) > 0xFFF else 3 # 简单判断地址宽度
+        start_addr = self.memory_view_start_addr
+        # 显示例如 64 个字
+        num_words_to_show = 256
+        end_addr = min(start_addr + num_words_to_show, len(self.simulator.memory))
 
-        for addr, word_binary in enumerate(self.simulator.memory):
-            if len(word_binary) == 16: # 确保是16位二进制
+        addr_width = 4 # 地址统一显示为4位十六进制
+
+        for addr in range(start_addr, end_addr):
+            word_binary = self.simulator.memory[addr]
+            if len(word_binary) == 16:
                 formatted_word = '_'.join([word_binary[j:j+4] for j in range(0, 16, 4)])
-            else: # 异常数据处理
-                formatted_word = word_binary # 直接显示原始数据
-
-            # 可以选择显示十六进制值：
-            # try:
-            #    hex_val = f"{int(word_binary, 2):04X}"
-            #    display_val = hex_val
-            # except ValueError:
-            #    display_val = "ERR_FORMAT"
-            # line = f"0x{addr:0{addr_width}X}: {display_val}\n"
+            else:
+                formatted_word = word_binary
 
             line = f"0x{addr:0{addr_width}X}: {formatted_word}\n"
             self.memory_display_text.insert('end', line)
 
-        self.memory_display_text.config(state='disabled') # 禁止编辑
+        self.memory_display_text.config(state='disabled')
 
     def update_ui_state(self):
         for i in range(16):
@@ -1099,7 +1126,7 @@ class App:
             self._update_memory_view()
 
         self._update_button_states()
-
+        self._update_memory_view()
         # 确保行号区的滚动位置在UI更新时也可能需要同步
         self._scroll_sync_y()
         if hasattr(self, '_update_current_line_highlight'): # 当前行高亮
@@ -1119,6 +1146,9 @@ class App:
             return
 
         self.is_running_continuously = True
+
+
+
         self.status_label.config(text="正在连续执行...")
         self._update_button_states() # 立即禁用“执行”、“单步”等，启用“停止”
         self._execute_next_instruction_in_run_mode()
