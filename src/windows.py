@@ -759,8 +759,8 @@ class App:
             else:
                 print(f"无效的断点行: {clicked_line_num} (总代码行数: {code_lines})")
 
-            # 调试
-            print(f"--- DEBUG: 断点切换后, self.breakpoints = {self.breakpoints} ---") # <--- 新增打印
+            # # 调试
+            # print(f"--- DEBUG: 断点切换后, self.breakpoints = {self.breakpoints} ---")
             self._redraw_line_numbers()
 
         except ValueError: # 如果点击处无法解析为行号
@@ -772,8 +772,8 @@ class App:
     def _redraw_line_numbers(self, event=None):
         """更新行号区域的显示，并标记断点。"""
 
-        # 调试
-        print(f"--- DEBUG: _redraw_line_numbers 被调用. 当前断点: {self.breakpoints} ---")
+        # # 调试
+        # print(f"--- DEBUG: _redraw_line_numbers 被调用. 当前断点: {self.breakpoints} ---")
 
         self.line_numbers_text.config(state='normal')
         self.line_numbers_text.delete('1.0', 'end')
@@ -914,7 +914,7 @@ class App:
     # 加载汇编文件到代码编辑区。
     # 如果提供了 filepath 参数，则直接加载该文件。否则，弹出文件选择对话框。
 
-        chosen_filepath = 'program.txt' # 使用传入的路径（如果存在）
+        chosen_filepath = filepath  # 使用传入的路径（如果存在）
 
         if chosen_filepath is None: # 如果没有直接提供路径，则打开对话框
             chosen_filepath = filedialog.askopenfilename(
@@ -935,8 +935,8 @@ class App:
                 # 成功加载并高亮后，可以考虑自动汇编 (可选)
                 # self.assemble_code()
 
-                # 调试
-                self.print_line_metrics_debug()
+                # # 调试
+                # self.print_line_metrics_debug()
 
             except FileNotFoundError:
                 self.status_label.config(text=f"错误: 文件未找到 '{chosen_filepath}'")
@@ -977,6 +977,30 @@ class App:
             # else:
             # print(f"PC {current_pc} 在映射范围之外或映射无效")
 
+
+    def _update_button_states(self):
+        """根据模拟器和运行状态更新所有控制按钮的可用性。"""
+        if self.is_running_continuously: # 正在连续执行
+            self.run_btn.config(state=tk.DISABLED)
+            self.step_btn.config(state=tk.DISABLED)
+            self.assemble_btn.config(state=tk.DISABLED)
+            self.load_btn.config(state=tk.DISABLED)
+            self.reset_btn.config(state=tk.DISABLED)
+            self.stop_btn.config(state=tk.NORMAL)
+        else: # 已停止、暂停、或未开始
+            # 检查是否有已加载的机器码并且模拟器没有因为错误而永久停止
+            can_run_or_step = not self.simulator.halted and \
+                hasattr(self.simulator, 'machine_code') and \
+                self.simulator.machine_code
+
+            self.run_btn.config(state=tk.NORMAL if can_run_or_step else tk.DISABLED)
+            self.step_btn.config(state=tk.NORMAL if can_run_or_step else tk.DISABLED)
+            self.assemble_btn.config(state=tk.NORMAL)
+            self.load_btn.config(state=tk.NORMAL)
+            self.reset_btn.config(state=tk.NORMAL)
+            self.stop_btn.config(state=tk.DISABLED)
+
+
     def assemble_code(self):
         self.status_label.config(text="正在汇编...")
         self.root.update_idletasks()
@@ -987,14 +1011,14 @@ class App:
         if hasattr(self, '_redraw_line_numbers'): # 如果需要，在汇编前先刷新一次行号区
             self._redraw_line_numbers()
 
-        print(f"--- DEBUG: assemble_code - 汇编前, self.breakpoints = {self.breakpoints} ---")
+        # print(f"--- DEBUG: assemble_code - 汇编前, self.breakpoints = {self.breakpoints} ---")
 
         asm_code = self.code_text.get('1.0', tk.END)
         asm_lines = asm_code.splitlines()
         success, message = self.simulator.load_program_from_source(asm_lines)
 
         # 调试
-        print(f"--- DEBUG: assemble_code - 汇编后, self.breakpoints = {self.breakpoints} ---")
+        # print(f"--- DEBUG: assemble_code - 汇编后, self.breakpoints = {self.breakpoints} ---")
 
         if success:
             self.status_label.config(text="汇编成功. 可以执行.")
@@ -1007,7 +1031,7 @@ class App:
 
     def _on_text_scroll(self, *args):
         # 代码编辑区滚动时，用于更新滚动条位置，并同步行号区滚动
-        self.v_scrollbar.set(*args) # 更新滚动条
+        self.v_scrollbar.set(*args)
         self.line_numbers_text.yview_moveto(args[0]) # 同步行号区的垂直视图
 
     def _on_scrollbar_yview(self, *args):
@@ -1016,31 +1040,20 @@ class App:
         self.line_numbers_text.yview(*args)
 
     def _on_unified_mousewheel_scroll(self, event):
-        """
-统一处理代码区和行号区的鼠标滚轮事件。
-该方法会滚动主代码编辑区 self.code_text。
-行号区的同步将通过 self.code_text 的 yscrollcommand 触发的 _on_text_scroll 方法完成。
-        """
-        delta_scroll = 0
+        # 统一处理代码区和行号区的鼠标滚轮事件。
+        # 该方法会滚动主代码编辑区 self.code_text。
+        # 行号区的同步将通过 self.code_text 的 yscrollcommand 触发的 _on_text_scroll 方法完成。        delta_scroll = 0
         if event.num == 4:  # Linux 向上滚动
             delta_scroll = -1
         elif event.num == 5:  # Linux 向下滚动
             delta_scroll = 1
         elif hasattr(event, 'delta') and event.delta != 0:  # Windows 和 macOS
-            # event.delta 通常是 +120 (向下) 或 -120 (向上)
-            delta_scroll = -1 * (event.delta // 120) # 标准化为 +1 (向下) 或 -1 (向上)
+            delta_scroll = -1 * (event.delta // 120)
 
         if delta_scroll != 0:
             self.code_text.yview_scroll(delta_scroll, "units")
-            # 当 self.code_text.yview_scroll 被调用后，
-            # 它配置的 yscrollcommand (即 self._on_text_scroll) 会被触发。
-            # self._on_text_scroll 方法会负责更新滚动条并将 self.line_numbers_text 同步滚动。
-            # self._on_text_scroll 内容:
-            #   self.v_scrollbar.set(*args)
-            #   self.line_numbers_text.yview_moveto(args[0])
-            # 所以这里不需要额外的同步调用。
 
-        return "break" # 阻止事件的默认行为，防止可能的双重滚动或意外行为
+        return "break" # 阻止事件的默认行为
 
 
     def update_line_numbers(self, event=None):
@@ -1140,14 +1153,11 @@ class App:
         #         self.mem_labels[i].config(text=mem_word_bin)
 
         # 调用新的内存视图更新方法，而不是更新旧的 self.mem_labels
-        self._update_memory_view()
+        if hasattr(self, '_update_memory_view'):
+            self._update_memory_view()
 
-        if self.simulator.halted or not self.simulator.machine_code:
-            self.step_btn.config(state=tk.DISABLED); self.run_btn.config(state=tk.DISABLED)
-        else:
-            self.step_btn.config(state=tk.NORMAL); self.run_btn.config(state=tk.NORMAL)
-        if self.simulator.machine_code: self.reset_btn.config(state=tk.NORMAL)
-        else: self.reset_btn.config(state=tk.DISABLED)
+        self._update_button_states()
+
         # 确保行号区的滚动位置在UI更新时也可能需要同步
         self._scroll_sync_y()
         if hasattr(self, '_update_current_line_highlight'): # 当前行高亮
@@ -1161,70 +1171,93 @@ class App:
         self.update_ui_state()
 
     def run_code(self):
-        if self.is_running_continuously: # 防止重复点击
-            return
-
+        if self.is_running_continuously: return
         if self.simulator.halted:
             self.status_label.config(text="模拟器已停止，无法连续执行。请重置。")
             return
 
         self.is_running_continuously = True
         self.status_label.config(text="正在连续执行...")
+        self._update_button_states() # 立即禁用“执行”、“单步”等，启用“停止”
+        self._execute_next_instruction_in_run_mode()
 
-        # 禁用不应在运行时按下的按钮
-        self.run_btn.config(state=tk.DISABLED)
-        self.step_btn.config(state=tk.DISABLED)
-        self.assemble_btn.config(state=tk.DISABLED)
-        self.load_btn.config(state=tk.DISABLED)
-        self.reset_btn.config(state=tk.DISABLED) # 运行时通常不允许重置，除非通过停止按钮
-        self.stop_btn.config(state=tk.NORMAL)   # 启用停止按钮
-
-        self._execute_next_instruction_in_run_mode() # 开始执行循环
 
     def _execute_next_instruction_in_run_mode(self):
+        # 1. 检查是否应该停止连续执行 (由用户点击停止、模拟器已停止、或断点触发)
         if not self.is_running_continuously or self.simulator.halted:
-            # 停止条件满足
-            self.is_running_continuously = False # 确保状态正确
-            final_status = "模拟器已停止." if self.simulator.halted else "连续执行被用户停止."
-            if self.simulator.halted and self.simulator.pc >= len(self.simulator.memory): # 或其他结束条件
-                final_status = "程序执行完毕."
-            self.status_label.config(text=final_status)
+            self.is_running_continuously = False # 确保标志位正确
+            if self._continuous_run_job:
+                self.root.after_cancel(self._continuous_run_job)
+                self._continuous_run_job = None
 
-            self.run_btn.config(state=tk.NORMAL if not self.simulator.halted else tk.DISABLED)
-            self.step_btn.config(state=tk.NORMAL if not self.simulator.halted else tk.DISABLED)
-            self.assemble_btn.config(state=tk.NORMAL)
-            self.load_btn.config(state=tk.NORMAL)
-            self.reset_btn.config(state=tk.NORMAL)
-            self.stop_btn.config(state=tk.DISABLED)
-            self.update_ui_state() # 最后更新一次UI
+            # 更新状态信息和按钮
+            # 只有在状态不是由“断点暂停”或“手动停止”设置时，才覆盖状态信息
+            current_status = self.status_label.cget("text")
+            if "暂停" not in current_status and "停止" not in current_status:
+                final_status = "模拟器已停止."
+                if self.simulator.halted:
+                    # 尝试给出更具体的停止原因
+                    is_at_end = False
+                    if self.simulator.pc >= len(self.simulator.pc_to_source_line_map):
+                        is_at_end = True
+
+                    if is_at_end:
+                        final_status = "程序执行完毕."
+                    else:
+                        final_status = "模拟器因错误或未知原因停止."
+                self.status_label.config(text=final_status)
+
+            self._update_button_states() # <--- 统一由这个方法更新所有按钮
+            self.update_ui_state()       # 更新UI显示（寄存器、PC、高亮等）
+            return # 结束本次执行
+
+        # 2. --- 断点检查 (在执行指令之前) ---
+        current_pc = self.simulator.pc
+        # 确保 pc_to_source_line_map 已加载且 PC 在有效范围内
+        if hasattr(self.simulator, 'pc_to_source_line_map') and \
+        self.simulator.pc_to_source_line_map and \
+        0 <= current_pc < len(self.simulator.pc_to_source_line_map):
+
+            source_line_num = self.simulator.pc_to_source_line_map[current_pc]
+            if source_line_num in self.breakpoints:
+                # 命中断点！
+                self.is_running_continuously = False # 停止连续运行
+                self.status_label.config(text=f"在断点处暂停: 第 {source_line_num} 行 (PC={current_pc})")
+
+                self._update_button_states() # 更新按钮状态（启用"单步"、"执行"等）
+                self.update_ui_state()       # 刷新UI以高亮断点行
+
+                # 暂停执行，不调用 step() 也不安排下一次 after()
+                return
+                # --- 断点检查结束 ---
+
+        # 3. 如果没有命中断点，则执行一步
+        # simulator.step() 会执行指令并更新PC。如果执行后出错或结束，它会返回 False。
+        if not self.simulator.step():
+            self.is_running_continuously = False # 模拟器内部停止了
+            # 状态将在下一次调用此函数开头的 if 块中被处理和更新
+            # 为了立即响应，我们也可以在这里直接处理
+            self.status_label.config(text="模拟器执行时遇到错误或结束。")
+            self._update_button_states()
+            self.update_ui_state()
             return
 
-        # 执行一步
-        self.simulator.step()
-        self.update_ui_state() # 更新GUI (寄存器、PC、内存、高亮行等)
+        # 4. 更新UI并安排下一次执行
+        self.update_ui_state() # 更新寄存器、PC、内存、高亮行等
 
-        # 安排下一次执行 (使用 after)
-        # delay_ms 控制执行速度，0表示尽快执行但仍允许GUI事件处理
-        # 你可以设置为 10, 50, 100 等来可视化执行过程
-        delay_ms = 50
-        self._continuous_run_job = self.root.after(delay_ms, self._execute_next_instruction_in_run_mode)
+        # 再次检查，以防 step() 操作改变了状态 (例如，执行了最后一条指令)
+        if self.is_running_continuously and not self.simulator.halted:
+            delay_ms = 50  # 执行速度控制 (毫秒)，你可以调小这个值让它跑得更快
+            self._continuous_run_job = self.root.after(delay_ms, self._execute_next_instruction_in_run_mode)
 
     def stop_continuous_run(self):
-        """用户点击停止按钮时调用。"""
+        if self.is_running_continuously:
+            self.status_label.config(text="已手动停止连续执行.")
         self.is_running_continuously = False
         if self._continuous_run_job:
-            self.root.after_cancel(self._continuous_run_job) # 取消已安排的 after 任务
+            self.root.after_cancel(self._continuous_run_job)
             self._continuous_run_job = None
-        # 状态更新和按钮状态恢复将由 _execute_next_instruction_in_run_mode 的下一次检查处理
-        # 或者在这里直接调用一次以确保状态立即更新：
-        self.status_label.config(text="连续执行已手动停止.")
-        self.run_btn.config(state=tk.NORMAL if not self.simulator.halted else tk.DISABLED)
-        self.step_btn.config(state=tk.NORMAL if not self.simulator.halted else tk.DISABLED)
-        self.assemble_btn.config(state=tk.NORMAL)
-        self.load_btn.config(state=tk.NORMAL)
-        self.reset_btn.config(state=tk.NORMAL)
-        self.stop_btn.config(state=tk.DISABLED)
-        # self.update_ui_state() # 可选，因为 _execute_next_instruction_in_run_mode 会在退出时调用
+        self._update_button_states() # 立即启用“执行”、“单步”等，禁用“停止”
 
     def reset_simulator(self):
         self.is_running_continuously = False # 如果正在运行，则停止
@@ -1238,7 +1271,7 @@ class App:
 
         if hasattr(self, 'breakpoints') and isinstance(self.breakpoints, set):
             self.breakpoints.clear()
-            print("--- DEBUG: 所有断点已在重置时清除 ---") # 可选的调试信息
+            # print("--- DEBUG: 所有断点已在重置时清除 ---") # 调试
         else:
             # 如果 breakpoints 属性不存在或类型不正确，创建一个空的，以防后续代码出错
             self.breakpoints = set()
@@ -1252,6 +1285,7 @@ class App:
              except tk.TclError: pass
         self.current_highlighted_tk_line = None
 
+        self._update_button_states()
         self.update_ui_state() # 会根据 PC=0 重新高亮 (如果映射存在且有效)
         if hasattr(self, '_redraw_line_numbers'): # 确保方法存在
             self._redraw_line_numbers()
