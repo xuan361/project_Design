@@ -68,6 +68,7 @@ class Simulator16Bit:
         self.registers = [0] * 16  # r0 to r15
         self.memory = ["0000_0000_0000_0000"] * 16384 # Memory for 512 words (16-bit each)
         self.pc = 0
+        self.previous_pc = 0
         self.halted = False
         self.machine_code = [] # 在加载到内存之前存储汇编代码
         self.label_map = {}
@@ -82,6 +83,7 @@ class Simulator16Bit:
     def reset(self):
         self.registers = [0] * 16
         self.pc = 0
+        self.previous_pc = 0
         self.halted = False
         # 可以从 self.machine_code 清除或重新加载 self.memory
         self.load_machine_code_to_memory() # 重新加载机器代码
@@ -433,7 +435,7 @@ class Simulator16Bit:
             self.halted = True
             print(f"模拟器在 PC={self.pc} 处停止 (PC越界或遇到无效指令).")
             return False
-
+        self.previous_pc = self.pc
         # 2. 获取并执行指令
         instruction = self.fetch()
         if instruction:
@@ -973,7 +975,7 @@ class App:
         # self.status_label.config(text="加载操作已取消或路径无效")
 
     def _update_current_line_highlight(self):
-        """更新代码编辑区中当前执行行的高亮。"""
+        # 更新代码编辑区中当前执行行的高亮
         # 1. 移除旧的高亮
         if self.current_highlighted_tk_line is not None:
             try:
@@ -987,7 +989,7 @@ class App:
 
         # 2. 应用新的高亮
         if not self.simulator.halted and hasattr(self.simulator, 'pc_to_source_line_map') and self.simulator.pc_to_source_line_map:
-            current_pc = self.simulator.pc
+            current_pc = self.simulator.previous_pccurrent_pc = self.simulator.previous_pc
             if 0 <= current_pc < len(self.simulator.pc_to_source_line_map):
                 source_line_num_1_based = self.simulator.pc_to_source_line_map[current_pc]
 
@@ -997,7 +999,7 @@ class App:
                         line_end_index = f"{source_line_num_1_based}.end lineend"
 
                         self.code_text.tag_add('current_execution_line_tag', line_start_index, line_end_index)
-                        self.code_text.see(line_start_index) # 滚动到该行使其可见
+                        # self.code_text.see(line_start_index) # 滚动到该行使其可见，但是会抢占控制权
                         self.current_highlighted_tk_line = source_line_num_1_based
                     except tk.TclError as e:
                         print(f"高亮错误: 无法高亮行 {source_line_num_1_based} (PC={current_pc}): {e}")
@@ -1032,7 +1034,7 @@ class App:
         self.status_label.config(text="正在汇编...")
         self.root.update_idletasks()
         self.update_line_numbers()
-        self.apply_syntax_highlighting() # <--- 汇编前确保高亮
+        self.apply_syntax_highlighting() # 汇编前确保高亮
 
         # 调试
         if hasattr(self, '_redraw_line_numbers'): # 如果需要，在汇编前先刷新一次行号区

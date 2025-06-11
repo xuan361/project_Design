@@ -254,10 +254,10 @@ def expand_pseudo_instructions(lines):
 
     # 二选一
 
-    # # 单独使用
-    # return expanded_instructions, label_map, data_lma_values
-    # 配合 windows.py 使用
-    return expanded_instructions, label_map, data_lma_values, expanded_instr_source_lines
+    # 单独使用
+    return expanded_instructions, label_map, data_lma_values
+    # # 配合 windows.py 使用
+    # return expanded_instructions, label_map, data_lma_values, expanded_instr_source_lines
 
 # 标签解析函数
 def resolve_labels(expanded_lines, label_map):
@@ -436,6 +436,18 @@ def assemble_program(lines):
             print(f"Error assembling line #{line_num + 1} (resolved content: '{line_content.strip()}'): {e}")
 
     return machine_code
+
+def write_machine_code_to_file(final_output_lines, output_filename="machine_code_output.txt"):
+    # 将格式化后的机器码列表写入到指定文件中
+
+    try:
+        with open(output_filename, 'w', encoding='utf-8') as f:
+            for line in final_output_lines:
+                f.write(line + '\n')
+        print(f"机器码已成功写入到 {output_filename}")
+    except IOError as e:
+        print(f"错误：无法写入文件 {output_filename}: {e}")
+
 
 # 主执行块
 if __name__ == '__main__':
