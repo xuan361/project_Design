@@ -268,7 +268,7 @@ class Simulator16Bit:
                     self.halted = True; return
 
                 word_data_str = self.memory[word_addr]
-                print(f"  从内存字地址 0x{word_addr:04X} 读取到内容: '{word_data_str}'")
+                # print(f"  从内存字地址 0x{word_addr:04X} 读取到内容: '{word_data_str}'")
 
                 if opcode == self.OPCODE_MAP['lw']:
                     loaded_val = int(word_data_str, 2)
@@ -279,12 +279,12 @@ class Simulator16Bit:
                     byte_offset_in_word = mem_addr % 2
                     byte_str = word_data_str[0:8] if byte_offset_in_word == 0 else word_data_str[8:16]
                     loaded_byte_signed = self.signed_int(byte_str, 8)
-                    print(f"  LB: 从字中提取的字节为 '{byte_str}', 符号扩展后值为 {loaded_byte_signed}")
-                    print(f"  LB: 准备将值 {loaded_byte_signed} (0x{loaded_byte_signed & 0xFFFF:04X}) 存入 r{rd}")
+                    # print(f"  LB: 从字中提取的字节为 '{byte_str}', 符号扩展后值为 {loaded_byte_signed}")
+                    # print(f"  LB: 准备将值 {loaded_byte_signed} (0x{loaded_byte_signed & 0xFFFF:04X}) 存入 r{rd}")
                     self.set_reg_value(rd, loaded_byte_signed)
 
-                print(f"  加载后, r{rd} 的值是: {self.get_reg_value(rd)}")
-                print("--- DEBUG: 加载指令执行完毕 ---\n")
+                # print(f"  加载后, r{rd} 的值是: {self.get_reg_value(rd)}")
+                # print("--- DEBUG: 加载指令执行完毕 ---\n")
 
             # S-type 指令 (存储): sb, sw
             elif opcode in [self.OPCODE_MAP['sb'], self.OPCODE_MAP['sw']]:
@@ -311,7 +311,7 @@ class Simulator16Bit:
                     self.halted = True; return
 
                 current_word_str = self.memory[word_addr]
-                print(f"  写入前，内存字地址 0x{word_addr:04X} 的内容: '{current_word_str}'")
+                # print(f"  写入前，内存字地址 0x{word_addr:04X} 的内容: '{current_word_str}'")
 
                 if opcode == self.OPCODE_MAP['sw']:
                     word_to_store_str = format(rt_val & 0xFFFF, '016b')
@@ -323,7 +323,7 @@ class Simulator16Bit:
                     new_word_str = byte_to_store_str + current_word_str[8:16] if byte_offset_in_word == 0 else current_word_str[0:8] + byte_to_store_str
                     self.memory[word_addr] = new_word_str
 
-                print(f"  写入后，内存字地址 0x{word_addr:04X} 的内容: '{self.memory[word_addr]}'")
+                # print(f"  写入后，内存字地址 0x{word_addr:04X} 的内容: '{self.memory[word_addr]}'")
                 # print("--- DEBUG: 存储指令执行完毕 ---\n")
 
             # --- SB-type (分支): beq, ble ---
@@ -502,6 +502,11 @@ class App:
 
         self.simulator = Simulator16Bit()
 
+        if hasattr(pse, 'reg_num_to_name'):
+            self.reg_num_to_name = pse.reg_num_to_name
+        else:
+            # 如果 pse 模块中没有，则在本地创建一个备用的
+            self.reg_num_to_name = {i: f'r{i}' for i in range(16)}
 
         self.is_running_continuously = False # 追踪是否处于连续执行状态
         self._continuous_run_job = None      # 用于 after 方法的ID
@@ -640,18 +645,36 @@ class App:
         ttk.Label(right_pane, text="寄存器:").grid(row=0, column=0,sticky=tk.NW, padx=(0,5), pady=(0,2))
         self.reg_frame = ttk.Frame(right_pane) # 父组件是 right_pane
         self.reg_frame.grid(row=1, column=0, sticky='nsew', padx=(0,5)) # 占据第1行，第0列
+
         # padx=(0,5) 在右边留一点间距
         self.reg_labels = {}
+
         for i in range(16):
-            reg_name_display = f'r{i}'
-            ttk.Label(self.reg_frame, text=f"{reg_name_display:>3}:").grid(row=i, column=0, sticky=tk.W, padx=2, pady=1)
+            # 1. 从映射字典获取寄存器的主要别名 (例如 'ra', 'sp', 'a0' 等)
+            primary_alias = self.reg_num_to_name.get(i, f'r{i}')
+
+            display_text = ""
+            # 2. 判断这个别名是否以 'a' 开头
+            if primary_alias.startswith('a'):
+                # 3a. 如果是 'a' 系列寄存器，则构建 "aX (rY):" 格式的字符串
+                display_text = f"{primary_alias} (r{i}):"
+            else:
+                # 3b. 否则 (如 r0, ra, sp)，只显示别名
+                display_text = f"r{i}:"
+
+            # 4. 创建标签，并使用 f-string 的左对齐格式化，确保所有冒号都能对齐
+            #    最长的字符串可能是 "a12 (r15):"，我们需要为它留足空间
+            ttk.Label(self.reg_frame, text=f"{display_text:<12}").grid(row=i, column=0, sticky=tk.W, padx=2, pady=1)
+
+            # 创建值标签的代码保持不变
             self.reg_labels[i] = ttk.Label(self.reg_frame, text="0 (0x0000)", width=18, relief=tk.GROOVE, anchor=tk.W)
             self.reg_labels[i].grid(row=i, column=1, sticky=tk.W, padx=2, pady=1)
 
-        self.pc_label_title = ttk.Label(self.reg_frame, text="PC:")
-        self.pc_label_title.grid(row=16, column=0, sticky=tk.W, padx=2, pady=(5,1))
-        self.pc_label_val = ttk.Label(self.reg_frame, text="0 (0x0000)", width=18, relief=tk.GROOVE, anchor=tk.W)
-        self.pc_label_val.grid(row=16, column=1, sticky=tk.W, padx=2, pady=(5,1))
+
+        # self.pc_label_title = ttk.Label(self.reg_frame, text="PC:")
+        # self.pc_label_title.grid(row=16, column=0, sticky=tk.W, padx=2, pady=(5,1))
+        # self.pc_label_val = ttk.Label(self.reg_frame, text="0 (0x0000)", width=18, relief=tk.GROOVE, anchor=tk.W)
+        # self.pc_label_val.grid(row=16, column=1, sticky=tk.W, padx=2, pady=(5,1))
 
         ttk.Label(right_pane, text="内存视图:").grid(row=0, column=1, sticky=tk.NW, padx=(5,0), pady=(0,2))
 
@@ -1231,8 +1254,8 @@ class App:
         for i in range(16):
             val = self.simulator.get_reg_value(i)
             self.reg_labels[i].config(text=f"{val} (0x{val:04X})")
-        pc_val = self.simulator.pc
-        self.pc_label_val.config(text=f"{pc_val} (0x{pc_val:04X})")
+        # pc_val = self.simulator.pc
+        # self.pc_label_val.config(text=f"{pc_val} (0x{pc_val:04X})")
 
         # 2. 有条件地更新内存视图
         if not is_continuous_run:
