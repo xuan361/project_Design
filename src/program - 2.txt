@@ -1,8 +1,0 @@
-lui a4, 0x8       // 0x800 * 0x8000 = 0x400_0000
-outer_loop:
-lui a2, 0x40      // 0x4000 * 2 = 0x8000
-inner_loop:
-addi a1, a1, 1
-ble a1, a2, inner_loop
-addi a3, a3, 1
-ble a3, a4, outer_loop

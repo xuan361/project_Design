@@ -165,7 +165,7 @@ class Simulator16Bit:
 
             self.pc = 0
             self.halted = False
-            return True, "汇编成功 (模拟器已加载修正版代码)."
+            return True, "汇编成功 (模拟器已加载代码)."
 
         except Exception as e:
             self.machine_code = []
@@ -1117,7 +1117,7 @@ class App:
             self.status_label.config(text=f"生成输出文件时出错: {e}")
             # 即使文件生成失败，我们仍然可以尝试加载模拟器
 
-        # 3. 加载修正后的代码到模拟器
+        # 3. 加载代码到模拟器
         success, message = self.simulator.load_program_from_source(
             expanded_instr, label_map, data_lma_values, source_lines_for_expanded
         )
