@@ -126,10 +126,13 @@ class Simulator16Bit:
             # 3. 准备并加载到模拟器内存 (这部分逻辑与之前类似)
             rom_output_lines = []
             for i, code in enumerate(raw_machine_code_for_sim):
-                if i < 256: # 假设ROM大小为256
+                if i < 128: # 假设ROM大小为256
                     rom_output_lines.append('_'.join([code[j:j+4] for j in range(0, 16, 4)]))
-            while len(rom_output_lines) < 256:
+            while len(rom_output_lines) < 128:
                 rom_output_lines.append("0000_0000_0000_0000")
+
+            if len(raw_machine_code_for_sim) > 128:
+                print(f"警告: ... ROM区限制为128行...")
 
             data_output_lines = []
             k = 0
@@ -191,10 +194,8 @@ class Simulator16Bit:
         return instruction_word # Should be "XXXXXXXXXXXXXXXX"
 
     def decode_and_execute(self, instruction_word):
-        """
-解码并执行单条16位指令字 (字符串格式 "XXXXXXXXXXXXXXXX")。
-此方法的解码逻辑严格对应于 pseudo.py 中 assemble_line 的编码逻辑。
-        """
+    # 解码并执行单条16位指令字 (字符串格式 "XXXXXXXXXXXXXXXX")。
+
         if instruction_word is None or len(instruction_word) != 16 or \
         not all(c in '01' for c in instruction_word):
             self.halted = True
@@ -244,67 +245,86 @@ class Simulator16Bit:
 
             # --- I-type (加载): lw, lb ---
             # 格式(编码): imm(4) + rs1(4) + rd(4) + opcode(4)
-            elif opcode in [self.OPCODE_MAP['lw'], self.OPCODE_MAP['lb']]:
+            elif opcode in [self.OPCODE_MAP['lb'], self.OPCODE_MAP['lw']]:
                 imm_bin = instruction_word[0:4]
                 rs1_bin = instruction_word[4:8]
                 rd_bin  = instruction_word[8:12]
                 rd = int(rd_bin, 2)
                 base_addr = self.get_reg_value(int(rs1_bin, 2))
                 offset = self.signed_int(imm_bin, 4)
-                mem_addr = (base_addr + offset) & 0xFFFF # 16位字节地址
+                mem_addr = (base_addr + offset) & 0xFFFF
+
+                # # 调试
+                # print("\n--- DEBUG: 执行加载指令 ---")
+                # print(f"  指令类型: {'LB' if opcode == self.OPCODE_MAP['lb'] else 'LW'}")
+                # print(f"  目标寄存器(rd): r{rd}")
+                # print(f"  基址寄存器(rs1)值: {base_addr} (0x{base_addr:04X})")
+                # print(f"  偏移量(imm): {offset}")
+                # print(f"  计算出的源内存地址: 0x{mem_addr:04X}")
+
+                word_addr = mem_addr // 2
+                if not (0 <= word_addr < len(self.memory)):
+                    print(f"  错误: 源地址 0x{word_addr:04X} 超出内存范围！")
+                    self.halted = True; return
+
+                word_data_str = self.memory[word_addr]
+                print(f"  从内存字地址 0x{word_addr:04X} 读取到内容: '{word_data_str}'")
 
                 if opcode == self.OPCODE_MAP['lw']:
-                    if mem_addr % 2 != 0: # lw 地址必须是偶数 (对齐到字)
-                        print(f"警告: LW 地址不对齐 PC={self.pc:04X}, Addr={mem_addr:04X}")
-                    word_addr = mem_addr // 2
-                    if not (0 <= word_addr < len(self.memory)):
-                        print(f"错误: LW 地址越界 PC={self.pc:04X}, Addr={word_addr:04X}")
-                        self.halted = True; return
-                    word_data_str = self.memory[word_addr]
                     loaded_val = int(word_data_str, 2)
+                    print(f"  LW: 准备将值 {loaded_val} (0x{loaded_val:04X}) 存入 r{rd}")
                     self.set_reg_value(rd, loaded_val)
 
                 elif opcode == self.OPCODE_MAP['lb']:
-                    word_addr = mem_addr // 2
                     byte_offset_in_word = mem_addr % 2
-                    if not (0 <= word_addr < len(self.memory)):
-                        print(f"错误: LB 地址越界 PC={self.pc:04X}, Addr={word_addr:04X}")
-                        self.halted = True; return
-                    word_data_str = self.memory[word_addr]
                     byte_str = word_data_str[0:8] if byte_offset_in_word == 0 else word_data_str[8:16]
-                    loaded_byte_signed = self.signed_int(byte_str, 8) # 字节加载后符号扩展
+                    loaded_byte_signed = self.signed_int(byte_str, 8)
+                    print(f"  LB: 从字中提取的字节为 '{byte_str}', 符号扩展后值为 {loaded_byte_signed}")
+                    print(f"  LB: 准备将值 {loaded_byte_signed} (0x{loaded_byte_signed & 0xFFFF:04X}) 存入 r{rd}")
                     self.set_reg_value(rd, loaded_byte_signed)
 
-            # --- S-type (存储): sw, sb ---
-            # 格式(编码): rt(rs2,源) + rs1(基址) + imm(4) + opcode(4)
-            elif opcode in [self.OPCODE_MAP['sw'], self.OPCODE_MAP['sb']]:
-                rt_bin  = instruction_word[0:4]
-                rs1_bin = instruction_word[4:8]
-                imm_bin = instruction_word[8:12]
+                print(f"  加载后, r{rd} 的值是: {self.get_reg_value(rd)}")
+                print("--- DEBUG: 加载指令执行完毕 ---\n")
+
+            # S-type 指令 (存储): sb, sw
+            elif opcode in [self.OPCODE_MAP['sb'], self.OPCODE_MAP['sw']]:
+                rt_bin  = instruction_word[0:4] # 源寄存器 (rs2)
+                rs1_bin = instruction_word[4:8] # 基址寄存器
+                imm_bin = instruction_word[8:12] # 偏移量
+
                 rt_val = self.get_reg_value(int(rt_bin, 2))
                 base_addr = self.get_reg_value(int(rs1_bin, 2))
                 offset = self.signed_int(imm_bin, 4)
                 mem_addr = (base_addr + offset) & 0xFFFF
 
+                # # 调试
+                # print("\n--- DEBUG: 执行存储指令 ---")
+                # print(f"  指令类型: {'SB' if opcode == self.OPCODE_MAP['sb'] else 'SW'}")
+                # print(f"  源寄存器(rt) r{int(rt_bin,2)} 的值: {rt_val} (0x{rt_val:04X})")
+                # print(f"  基址寄存器(rs1) r{int(rs1_bin,2)} 的值: {base_addr} (0x{base_addr:04X})")
+                # print(f"  偏移量(imm): {offset}")
+                # print(f"  计算出的目标内存地址: 0x{mem_addr:04X}")
+
+                word_addr = mem_addr // 2
+                if not (0 <= word_addr < len(self.memory)):
+                    print(f"  错误: 目标地址 0x{word_addr:04X} 超出内存范围！")
+                    self.halted = True; return
+
+                current_word_str = self.memory[word_addr]
+                print(f"  写入前，内存字地址 0x{word_addr:04X} 的内容: '{current_word_str}'")
+
                 if opcode == self.OPCODE_MAP['sw']:
-                    if mem_addr % 2 != 0:
-                        print(f"警告: SW 地址不对齐 PC={self.pc:04X}, Addr={mem_addr:04X}")
-                    word_addr = mem_addr // 2
-                    if not (0 <= word_addr < len(self.memory)):
-                        print(f"错误: SW 地址越界 PC={self.pc:04X}, Addr={word_addr:04X}")
-                        self.halted = True; return
-                    self.memory[word_addr] = format(rt_val & 0xFFFF, '016b')
+                    word_to_store_str = format(rt_val & 0xFFFF, '016b')
+                    self.memory[word_addr] = word_to_store_str
 
                 elif opcode == self.OPCODE_MAP['sb']:
-                    word_addr = mem_addr // 2
                     byte_offset_in_word = mem_addr % 2
-                    if not (0 <= word_addr < len(self.memory)):
-                        print(f"错误: SB 地址越界 PC={self.pc:04X}, Addr={word_addr:04X}")
-                        self.halted = True; return
-                    byte_to_store_str = format(rt_val & 0xFF, '08b') # 只取低8位
-                    current_word_str = self.memory[word_addr]
+                    byte_to_store_str = format(rt_val & 0xFF, '08b')
                     new_word_str = byte_to_store_str + current_word_str[8:16] if byte_offset_in_word == 0 else current_word_str[0:8] + byte_to_store_str
                     self.memory[word_addr] = new_word_str
+
+                print(f"  写入后，内存字地址 0x{word_addr:04X} 的内容: '{self.memory[word_addr]}'")
+                # print("--- DEBUG: 存储指令执行完毕 ---\n")
 
             # --- SB-type (分支): beq, ble ---
             # 格式(编码): rs2(4) + rs1(4) + imm(4) + opcode(4)
@@ -485,6 +505,7 @@ class App:
 
         self.is_running_continuously = False # 追踪是否处于连续执行状态
         self._continuous_run_job = None      # 用于 after 方法的ID
+        self.run_step_counter = 0
 
         # --- 语法高亮：定义标签名称列表 (只包含当前需要的) ---
         self.highlight_tags = [
@@ -585,6 +606,9 @@ class App:
         self.stop_btn.pack(side=tk.LEFT, padx=2)
         self.reset_btn = ttk.Button(controls_frame, text="重置", command=self.reset_simulator, state=tk.DISABLED)
         self.reset_btn.pack(side=tk.LEFT, padx=2)
+
+        # self.debug_btn = ttk.Button(controls_frame, text="内存调试", command=self.debug_print_memory)
+        # self.debug_btn.pack(side=tk.LEFT, padx=2)
 
         self.status_label = ttk.Label(code_area_frame, text="已就绪", relief=tk.SUNKEN, anchor=tk.W)
         self.status_label.grid(row=4, column=0, columnspan=3, sticky=(tk.W, tk.E), pady=(5,0))
@@ -1149,56 +1173,87 @@ class App:
         # 滚动条的位置也应该被正确设置，这由 _on_text_scroll -> self.v_scrollbar.set() 完成
 
     def _update_memory_view(self):
-        # 更新内存视图文本区域的内容
+        """更新内存视图，确保每行正确显示一个字节及其对应的十进制值。"""
         if not hasattr(self, 'memory_display_text') or not self.memory_display_text.winfo_exists():
             return
 
         self.memory_display_text.config(state='normal')
         self.memory_display_text.delete('1.0', 'end')
 
-        start_addr = self.memory_view_start_addr
-        # 显示例如 64 个字
-        num_words_to_show = 16384
-        end_addr = min(start_addr + num_words_to_show, len(self.simulator.memory))
+        start_byte_addr = self.memory_view_start_addr
+        if start_byte_addr % 2 != 0:
+            start_byte_addr -= 1
 
-        addr_width = 4 # 地址统一显示为4位十六进制
+        num_bytes_to_show = 128 # 你可以按需调整显示的字节数
+        end_byte_addr = min(start_byte_addr + num_bytes_to_show, len(self.simulator.memory) * 2)
 
-        for addr in range(start_addr, end_addr):
-            word_binary = self.simulator.memory[addr]
+        addr_width = 4
+
+        # 循环遍历字节地址
+        for current_byte_addr in range(start_byte_addr, end_byte_addr):
+            word_addr = current_byte_addr // 2
+            byte_offset = current_byte_addr % 2
+
+            # --- 核心修正点在这里 ---
+
+            word_binary = self.simulator.memory[word_addr]
+            byte_binary = ""
+            decimal_value = "N/A"
+            formatted_byte = "ERR_FORMAT"
+
             if len(word_binary) == 16:
-                formatted_word = '_'.join([word_binary[j:j+4] for j in range(0, 16, 4)])
-            else:
-                formatted_word = word_binary
+                # 1. 根据字节偏移，正确提取8位的二进制字节字符串
+                byte_binary = word_binary[0:8] if byte_offset == 0 else word_binary[8:16]
 
-            line = f"0x{addr:0{addr_width}X}: {formatted_word}\n"
+                # 2. 基于提取出的8位字节字符串来计算十进制值
+                try:
+                    # 注意：这里我们用 int(byte_binary, 2) 而不是 int(word_binary, 2)
+                    decimal_value = int(byte_binary, 2)
+                except (ValueError, TypeError):
+                    decimal_value = "N/A"
+
+                # 3. 准备格式化的8位二进制显示
+                formatted_byte = f"{byte_binary[0:4]}_{byte_binary[4:8]}"
+
+            # 4. 构建包含正确十进制值的显示行
+            line = f"0x{current_byte_addr:0{addr_width}X}: {formatted_byte} ({decimal_value})\n"
             self.memory_display_text.insert('end', line)
 
         self.memory_display_text.config(state='disabled')
 
-    def update_ui_state(self):
+
+    def update_ui_state(self, is_continuous_run=False):
+        """
+        根据模拟器的当前状态更新所有UI元素。
+        is_continuous_run: 一个布尔值，用于判断当前是否处于连续执行模式。
+        """
+        # 1. 更新寄存器和PC （这些开销小，总是更新）
         for i in range(16):
             val = self.simulator.get_reg_value(i)
             self.reg_labels[i].config(text=f"{val} (0x{val:04X})")
         pc_val = self.simulator.pc
         self.pc_label_val.config(text=f"{pc_val} (0x{pc_val:04X})")
 
-        # for i in range(min(16, len(self.simulator.memory))):
-        #     mem_word_bin = self.simulator.memory[i]
-        #     if len(mem_word_bin) == 16:
-        #         formatted_mem_word = '_'.join([mem_word_bin[j:j+4] for j in range(0, 16, 4)])
-        #         self.mem_labels[i].config(text=formatted_mem_word)
-        #     else:
-        #         self.mem_labels[i].config(text=mem_word_bin)
+        # 2. 有条件地更新内存视图
+        if not is_continuous_run:
+            # 如果是单步执行、暂停、或程序结束时，我们总是完整刷新内存视图
+            if hasattr(self, '_update_memory_view'):
+                self._update_memory_view()
+        else:
+            # 如果是连续执行模式，我们只定期刷新内存视图以提升性能
+            self.run_step_counter += 1
+            # 每隔20步更新一次内存，你可以按需调整这个数字
+            if self.run_step_counter % 20 == 0:
+                if hasattr(self, '_update_memory_view'):
+                    self._update_memory_view()
 
-        # 调用新的内存视图更新方法，而不是更新旧的 self.mem_labels
-        if hasattr(self, '_update_memory_view'):
-            self._update_memory_view()
+        # 3. 更新按钮状态
+        if hasattr(self, '_update_button_states'):
+            self._update_button_states()
 
-        self._update_button_states()
-        self._update_memory_view()
-        # 确保行号区的滚动位置在UI更新时也可能需要同步
+        # 4. 更新行号区滚动和当前行高亮
         self._scroll_sync_y()
-        if hasattr(self, '_update_current_line_highlight'): # 当前行高亮
+        if hasattr(self, '_update_current_line_highlight'):
             self._update_current_line_highlight()
 
     def step_code(self):
@@ -1314,6 +1369,30 @@ class App:
             self.root.after_cancel(self._continuous_run_job)
             self._continuous_run_job = None
         self._update_button_states() # 立即启用“执行”、“单步”等，禁用“停止”
+
+    def debug_print_memory(self):
+        """打印关键内存地址的内容以供调试。"""
+        print("\n--- 内存状态调试 ---")
+        if not hasattr(self.simulator, 'memory') or not self.simulator.memory:
+            print("模拟器内存尚未初始化。")
+            return
+
+        # 检查代码预期的ROM数据地址 (0x0100 对应字地址 128)
+        expected_data_addr = 128
+        # 检查之前错误的地址 (0x0200 对应字地址 256)
+        wrong_data_addr = 256
+
+        print(f"模拟器总内存大小: {len(self.simulator.memory)} 字")
+
+        if len(self.simulator.memory) > wrong_data_addr + 5: # 确保索引有效
+            print(f"内存地址 0x{expected_data_addr:04X} (字地址 {expected_data_addr}) 的内容: {self.simulator.memory[expected_data_addr]}")
+            print(f"内存地址 0x{wrong_data_addr:04X} (字地址 {wrong_data_addr}) 的内容: {self.simulator.memory[wrong_data_addr]}")
+
+            # 我们期望看到 self.simulator.memory[128] 的值是 "0000110100001100" (代表13和12)
+            # 而不是全0
+        else:
+            print("内存大小不足，无法执行此调试。")
+        print("--- 调试结束 ---\n")
 
     def reset_simulator(self):
         self.is_running_continuously = False # 如果正在运行，则停止
