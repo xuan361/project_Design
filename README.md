@@ -18,7 +18,7 @@ pseudo.py不能直接单独使用，
 
 （老汇编代码已移至 /src/old asm 文件夹中）
 
-（开发日志写在Development Log.mdl里面）
+（开发日志写在Development Log.md里面）
 
 
 
