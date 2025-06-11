@@ -1158,7 +1158,7 @@ class App:
 
         start_addr = self.memory_view_start_addr
         # 显示例如 64 个字
-        num_words_to_show = 256
+        num_words_to_show = 16384
         end_addr = min(start_addr + num_words_to_show, len(self.simulator.memory))
 
         addr_width = 4 # 地址统一显示为4位十六进制
