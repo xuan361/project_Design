@@ -15,7 +15,7 @@ def resolve_labels(expanded_lines, label_map):
 
         instr = tokens[0]
 
-        # 我们只关心跳转和分支指令中的标签解析
+        # 只关心跳转和分支指令中的标签解析
         if instr in ['ble', 'beq', 'jal']:
             # 这里的判断条件可能需要根据你的指令格式微调，但核心逻辑是找到最后一个参数
             if len(tokens) < 2: # 至少需要指令和1个参数
@@ -106,90 +106,57 @@ class Simulator16Bit:
         else:
             self.registers[reg_idx] = 0 # r0 恒 0
 
-    def load_program_from_source(self, asm_lines):
+    def load_program_from_source(self, expanded_instr, label_map, data_lma_values, source_lines_for_expanded):
         # 将汇编代码转换为机器码，并将其存储在内部
         self.pc_to_source_line_map = [] # 重置映射
         self.machine_code = []      # 重置机器码存储
         try:
-            # 1.扩展伪指令
-            expanded_instr, self.label_map, data_lma_values, source_lines_for_expanded = pse.expand_pseudo_instructions(asm_lines)
+            # 1. 解析标签 (使用修正后的 resolve_labels)
+            resolved_instr_for_sim = resolve_labels(expanded_instr, label_map)
 
-           # 2. 解析标签
-            resolved_instr = resolve_labels(expanded_instr, self.label_map)
-            # print(f"Resolved: {resolved_instr}")
+            self.pc_to_source_line_map = source_lines_for_expanded
 
-            self.pc_to_source_line_map = source_lines_for_expanded # 存储映射
+            # 2. 组装 (使用 pseudo.py 的 assemble_line)
+            raw_machine_code_for_sim = []
+            for line_content in resolved_instr_for_sim:
+                if line_content.strip():
+                    bin_code = pse.assemble_line(line_content.strip())
+                    raw_machine_code_for_sim.append(bin_code)
 
-            # 3.组装 解析的指令行
-            raw_machine_code = []
-            for line_content in resolved_instr:
-                if line_content.strip(): # 确保非空
-                    bin_code = pse.assemble_line(line_content.strip()) # 返回"XXXXXXXXXXXXXXXX"
-                    raw_machine_code.append(bin_code)
-            # print(f"Raw MC: {raw_machine_code}")
-
-            # 4. 处理_data_lma值并与指令代码结合
-            # 汇编程序会生成扁平的 `final_output_lines`，其中包含指令和数据
-            # 指令部分填充为 128 行
-            # 目前只使用 raw_machine_code
-            # 需要对齐
-            rom_output_lines_formatted = []
-            self.machine_code = []
-            # 格式化和存储指令机器代码
-            for i, code in enumerate(raw_machine_code):
-                if i < 128: # 最多 128 条指令
-                    code = raw_machine_code[i]
-                    formatted_bin_code = '_'.join([code[j:j+4] for j in range(0, 16, 4)])
-                    rom_output_lines_formatted.append(formatted_bin_code)
-
-            # 少于 128 条指令，填0
-            while len(self.machine_code) < 128:
-                self.machine_code.append("0000_0000_0000_0000")
-
-            # 添加 data_lma 值
-
-            temp_formatted_code = []
-            for code in raw_machine_code:
-                temp_formatted_code.append('_'.join([code[j:j+4] for j in range(0, 16, 4)]))
-
-            instruction_machine_code_formatted = []
-            for code in raw_machine_code:
-                instruction_machine_code_formatted.append('_'.join([code[j:j+4] for j in range(0, 16, 4)]))
-
-            rom_output_lines = instruction_machine_code_formatted[:128]
-            while len(rom_output_lines) < 128:
+            # 3. 准备并加载到模拟器内存 (这部分逻辑与之前类似)
+            rom_output_lines = []
+            for i, code in enumerate(raw_machine_code_for_sim):
+                if i < 256: # 假设ROM大小为256
+                    rom_output_lines.append('_'.join([code[j:j+4] for j in range(0, 16, 4)]))
+            while len(rom_output_lines) < 256:
                 rom_output_lines.append("0000_0000_0000_0000")
 
-            data_output_lines_formatted = []
+            data_output_lines = []
             k = 0
             while k < len(data_lma_values):
-                byte1_val = data_lma_values[k]
-                byte1_bin = format(byte1_val, '08b')
-                byte1_formatted_part1 = f"{byte1_bin[0:4]}_{byte1_bin[4:8]}"
-
-                byte2_formatted_part2 = "0000_0000" # 默认的配对字节
+                # ... (处理 data_lma_values 的逻辑不变) ...
+                byte1_val = data_lma_values[k]; byte1_bin = format(byte1_val, '08b')
+                byte1_formatted = f"{byte1_bin[0:4]}_{byte1_bin[4:8]}"
                 if k + 1 < len(data_lma_values):
-                    byte2_val = data_lma_values[k+1]
-                    byte2_bin = format(byte2_val, '08b')
-                    byte2_formatted_part2 = f"{byte2_bin[0:4]}_{byte2_bin[4:8]}"
-
-                data_output_lines_formatted.append(f"{byte1_formatted_part1}_{byte2_formatted_part2}")
+                    byte2_val = data_lma_values[k+1]; byte2_bin = format(byte2_val, '08b')
+                    byte2_formatted = f"{byte2_bin[0:4]}_{byte2_bin[4:8]}"
+                else:
+                    byte2_formatted = "0000_0000"
+                data_output_lines.append(f"{byte1_formatted}_{byte2_formatted}")
                 k += 2
-            self.load_machine_code_to_memory()
-            self.machine_code = rom_output_lines + data_output_lines_formatted
-            # print(f"Final MC for simulator: {self.machine_code[:5]} ...")
 
+            # self.machine_code 存储的是模拟器将要使用的、格式化后的机器码
+            self.machine_code = rom_output_lines + data_output_lines
             self.load_machine_code_to_memory()
+
             self.pc = 0
             self.halted = False
-            return True, "Assembled successfully."
+            return True, "汇编成功 (模拟器已加载修正版代码)."
         except Exception as e:
             self.machine_code = []
             self.pc_to_source_line_map = []
-            print(f"Assembly Error: {e}")
-            import traceback
-            traceback.print_exc()
-            return False, f"Assembly Error: {e}"
+            import traceback; traceback.print_exc()
+            return False, f"加载到模拟器时出错: {e}"
 
     def load_machine_code_to_memory(self):
         self.memory = ["0000_0000_0000_0000"] * len(self.memory) # 先清除内存
@@ -1036,28 +1003,57 @@ class App:
         self.update_line_numbers()
         self.apply_syntax_highlighting() # 汇编前确保高亮
 
-        # 调试
-        if hasattr(self, '_redraw_line_numbers'): # 如果需要，在汇编前先刷新一次行号区
-            self._redraw_line_numbers()
-
-        # print(f"--- DEBUG: assemble_code - 汇编前, self.breakpoints = {self.breakpoints} ---")
-
+        # --- 步骤 1: 扩展伪指令 (只做一次) ---
         asm_code = self.code_text.get('1.0', tk.END)
         asm_lines = asm_code.splitlines()
-        success, message = self.simulator.load_program_from_source(asm_lines)
+        try:
+            expanded_instr, label_map, data_lma_values, source_lines_for_expanded = \
+                pse.expand_pseudo_instructions(asm_lines)
+        except Exception as e:
+            self.status_label.config(text=f"汇编错误 (扩展阶段): {e}")
+            return
 
-        # 调试
-        # print(f"--- DEBUG: assemble_code - 汇编后, self.breakpoints = {self.breakpoints} ---")
+        # --- 步骤 2: 生成用于输出文件的机器码 (使用 pseudo.py 的 +1 逻辑) ---
+        try:
+            resolved_for_file = pse.resolve_labels(expanded_instr, label_map)
+            raw_mc_for_file = [pse.assemble_line(line.strip()) for line in resolved_for_file if line.strip()]
+
+            # 格式化并写入文件 (这段逻辑可以从 pseudo.py 的 if __name__ 块中借鉴)
+            rom_lines = ['_'.join([c[j:j+4] for j in range(0,16,4)]) for c in raw_mc_for_file[:128]]
+            while len(rom_lines) < 128: rom_lines.append("0000_0000_0000_0000") # 假设ROM为128
+
+            data_lines = []
+            k=0
+            while k < len(data_lma_values):
+                b1 = data_lma_values[k]; b1_f = f"{format(b1,'08b')[0:4]}_{format(b1,'08b')[4:8]}"
+                b2_f = "0000_0000"
+                if k + 1 < len(data_lma_values):
+                    b2 = data_lma_values[k+1]; b2_f = f"{format(b2,'08b')[0:4]}_{format(b2,'08b')[4:8]}"
+                data_lines.append(f"{b1_f}_{b2_f}"); k+=2
+
+            final_output_for_file = rom_lines + data_lines
+            pse.write_machine_code_to_file(final_output_for_file, "machine_code_output.txt")
+            print("--- 文件 machine_code_output.txt 已使用 pseudo.py 的原始逻辑生成 ---")
+        except Exception as e:
+            self.status_label.config(text=f"生成输出文件时出错: {e}")
+            # 即使文件生成失败，我们仍然可以尝试加载模拟器
+
+        # --- 步骤 3: 加载修正后的代码到模拟器 ---
+        success, message = self.simulator.load_program_from_source(
+            expanded_instr, label_map, data_lma_values, source_lines_for_expanded
+        )
 
         if success:
-            self.status_label.config(text="汇编成功. 可以执行.")
+            # 优先显示模拟器加载成功的消息
+            self.status_label.config(text=message)
             self.simulator.halted = False
-    # self.pc_to_source_line_map = self.simulator.pc_to_source_line_map # Simulator内部已存储
         else:
             self.status_label.config(text=f"汇编失败: {message}")
             self.simulator.halted = True
-        self.update_ui_state() # update_ui_state 内部会调用 _update_current_line_highlight
 
+        self.update_ui_state()
+
+        
     def go_to_memory_address(self):
         # 跳转到用户在输入框中指定的内存地址
         addr_str = self.mem_addr_entry.get().strip()

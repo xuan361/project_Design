@@ -254,10 +254,10 @@ def expand_pseudo_instructions(lines):
 
     # 二选一
 
-    # 单独使用
-    return expanded_instructions, label_map, data_lma_values
-    # # 配合 windows.py 使用
-    # return expanded_instructions, label_map, data_lma_values, expanded_instr_source_lines
+    # # 单独使用
+    # return expanded_instructions, label_map, data_lma_values
+    # 配合 windows.py 使用
+    return expanded_instructions, label_map, data_lma_values, expanded_instr_source_lines
 
 # 标签解析函数
 def resolve_labels(expanded_lines, label_map):
@@ -519,9 +519,6 @@ if __name__ == '__main__':
         print(line)
 
     # 输出机器码到文件 machine_code_output.txt
-    output_filename = 'machine_code_output.txt'
-    with open(output_filename, 'w', encoding='utf-8') as f:
-        for line in final_output_lines:
-            f.write(line + '\n')
+    write_machine_code_to_file(final_output_lines, "machine_code_output_standalone.txt")
     # 调试部分，应该用不上了
     #print(f"\nMachine code also written to {output_filename}")
