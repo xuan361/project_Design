@@ -1,4 +1,4 @@
-# 若想切换单独使用或配合 windows.py 使用，调整 expand_pseudo_instructions(lines) 末尾
+# 若想切换 单独使用 或 配合 windows.py 使用 ，调整 expand_pseudo_instructions(lines) 末尾
 
 import re
 
@@ -29,7 +29,7 @@ register_alias = {
     # r0为恒0寄存器，r1为返回地址寄存器ra，r2为栈指针寄存器sp，其余为运算寄存器a0-a12(即r3-r15)
 }
 
-# 如果需要，可以进行反向映射显示
+# 反向映射显示
 reg_num_to_name = {v: k for k, v in register_alias.items()}
 for i in range(16): # 确保所有 r0-r15 都有一个默认名称（如果不在alias中）
     if i not in reg_num_to_name:
@@ -49,7 +49,7 @@ def reg_bin(reg_name):
 
 def imm_bin(val, bits=4):
     if not isinstance(val, int):
-        val = int(str(val),0) # Allow hex strings like "0x..."
+        val = int(str(val),0) # 允许十六进制字符串
     if val < 0:# 负立即数
         val = (1 << bits) + val
     return format(val % (1 << bits), f'0{bits}b')
@@ -66,12 +66,12 @@ def strip_comments(line):
 
 # 伪指令扩展函数
 def expand_pseudo_instructions(lines):
-    expanded_instructions = []    # 存儲指令字串 (lui, addi, add 等)
+    expanded_instructions = []    # 存储指令字串 (lui, addi, add 等)
     label_map = {}              # 存储指令标签的 "PC" (索引)
     current_expanded_instruction_pc = 0  # 指令的程序计数器
 
     data_lma_values = []        # 专门存储 _data_lma 的原始数值
-    active_data_collection_label = None # 用于追踪当前是否在为 _data_lma 收集数据
+    active_data_collection_label = None # 追踪当前是否在为 _data_lma 收集数据
 
     # 存储每条扩展后指令对应的原始源代码行号 (1-based)
     expanded_instr_source_lines = []
@@ -106,7 +106,7 @@ def expand_pseudo_instructions(lines):
 
             instruction_part = rest_of_line.strip()
 
-        # 如果这一行除了标签外没有其他內容，则跳过后续的指令/数据处理
+        # 如果这一行除了标签外没有其他内容，则跳过后续的指令/数据处理
         if not instruction_part:
             # 如果仅仅是 "_data_lma:" 这样的一行，active_data_collection_label 已被设置
             # 如果是 "other_label:"，active_data_collection_label 也被设置
@@ -148,7 +148,7 @@ def expand_pseudo_instructions(lines):
                 active_data_collection_label = None # 清除状态，避免干扰下一行
 
             continue
-        # 应该用不上
+        # 应该用不上了
         # 处理不属于 _data_lma 的 .byte 指令 (如果有的话，按老方式或报错)
         # elif first_word == '.byte':
         #     # 按老方式处理，將 "00000000XXXXXXXX" 加入 expanded_instructions
@@ -186,7 +186,6 @@ def expand_pseudo_instructions(lines):
                 current_expanded_instruction_pc += 1
 
                 #    addi 负责处理后8位 (imm[7:0])，可能需要两条 addi 指令
-                #    因为根据
                 #       0010_0001_0011_1100
                 #       //imm   rs,  rd,  addi    (r3) = (r1) + 2     // 此时(r3) = 4, pc = 6
                 #    每条 addi 只能处理4位的立即数
@@ -234,7 +233,7 @@ def expand_pseudo_instructions(lines):
                 expanded_instr_source_lines.append(actual_source_line_number) # 记录行号
                 current_expanded_instruction_pc += 1
 
-            elif op == 'jal' and len(tokens) == 2: # 伪指令 jal LBL (跳转，返回地址到r0)
+            elif op == 'jal' and len(tokens) == 2: # 伪指令 jal (跳转，返回地址到r0)
                 label_ref = tokens[1].replace(',', '')
                 expanded_instructions.append(f'jal r0, {label_ref}')
                 expanded_instr_source_lines.append(actual_source_line_number) # 记录行号
@@ -252,11 +251,13 @@ def expand_pseudo_instructions(lines):
                 expanded_instr_source_lines.append(actual_source_line_number) # 记录行号
                 current_expanded_instruction_pc += 1
 
-    # 二选一
-
-    # # 单独使用
+    """
+    开头提到的二选一
+    """
+    # # 1.单独使用
     # return expanded_instructions, label_map, data_lma_values
-    # 配合 windows.py 使用
+
+    # 2.配合 windows.py 使用
     return expanded_instructions, label_map, data_lma_values, expanded_instr_source_lines
 
 # 标签解析函数
@@ -329,7 +330,7 @@ def resolve_labels(expanded_lines, label_map):
             resolved.append(line)
     return resolved
 
-# 指令汇编函数 (assemble_line)
+# 指令汇编函数
 def assemble_line(line):
 
     stripped_line = line.strip()
@@ -344,10 +345,9 @@ def assemble_line(line):
     if instr == 'jal': # UJ-type: imm[11:0] rd opcode
         rd = reg_bin(tokens[1])
         imm_val = int(tokens[2], 0) # 支持各种进制的立即数
-        imm = imm_bin(imm_val, 8) # 假设jal的立即数是8位 for this ISA
-        # RISC-V JAL has a 20-bit imm. This is custom.
-        # 16-bit format: imm(8) rd(4) opcode(4)
-        return imm + rd + opcode_map[instr] # Total 16 bits
+        imm = imm_bin(imm_val, 8) # jal的立即数是8位
+        # format: imm(8) rd(4) opcode(4)
+        return imm + rd + opcode_map[instr]
 
     elif instr == 'jalr': # I-type like: imm[7:0] rs1 rd opcode
         rd = reg_bin(tokens[1])
@@ -378,11 +378,11 @@ def assemble_line(line):
         imm = imm_bin(imm_val, 4)  # 偏移是4位
         return imm + rs + rd + opcode_map[instr]
 
-    elif instr in ['sb', 'sw']: # S-type (Store): imm[3:0] rs1 rs2 opcode (rs2 is src reg)
-        # Your format seems: imm rs rt opcode (rt is src)
-        rt = reg_bin(tokens[1])   # Source register (rs2 in standard RISC-V)
+    elif instr in ['sb', 'sw']: # S-type (Store): imm[3:0] rs1 rs2 opcode （rs2 是源寄存器）
+        # format: imm rs rt opcode (rt is src)
+        rt = reg_bin(tokens[1])   # Source register
         imm_val = int(tokens[2],0) # offset
-        rs = reg_bin(tokens[3])   # Base register (rs1 in standard RISC-V)
+        rs = reg_bin(tokens[3])   # 基址寄存器
         imm = imm_bin(imm_val, 4) # 偏移是4位
         return rt + rs + imm + opcode_map[instr] # 顺序 base_reg src_reg imm op
 
@@ -451,7 +451,10 @@ def write_machine_code_to_file(final_output_lines, output_filename="machine_code
 
 # 主执行块
 if __name__ == '__main__':
-    # 注意！！从 program.txt 文件读取汇编指令，若文件命名不同则及时更改
+    """
+    注意！！从 program.txt 文件读取汇编指令，若文件命名不同则及时更改
+    """
+    
     try:
         with open('program.txt', 'r', encoding='utf-8') as f:
             lines = f.readlines()

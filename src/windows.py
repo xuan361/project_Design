@@ -2,7 +2,7 @@ import tkinter as tk
 from tkinter import filedialog, scrolledtext, ttk
 import re
 import time
-import pseudo as pse
+import pseudo as pse # 导入pseudo.py
 
 def resolve_labels(expanded_lines, label_map):
     resolved = []
@@ -12,28 +12,27 @@ def resolve_labels(expanded_lines, label_map):
 
         if not tokens:
             continue
-
         instr = tokens[0]
 
         # 只关心跳转和分支指令中的标签解析
         if instr in ['ble', 'beq', 'jal']:
-            # 这里的判断条件可能需要根据你的指令格式微调，但核心逻辑是找到最后一个参数
             if len(tokens) < 2: # 至少需要指令和1个参数
                 resolved.append(line)
                 continue
 
             last_arg = tokens[-1]
+
             try:
                 # 如果最后一个参数已经是数字，则不是标签，直接使用
                 int(last_arg, 0)
                 resolved.append(line)
+
             except ValueError:
-                # 最后一个参数不是数字，我们认为它是需要解析的标签
+                # 最后一个参数不是数字，是需要解析的标签
                 label_name = last_arg
                 if label_name not in label_map:
                     raise KeyError(f"错误: 未定义的标签 '{label_name}' 在指令中被使用: '{line}' (在扩展后指令列表的索引 {idx})")
 
-                # --- 核心修正点 ---
                 # 使用标签映射中正确的PC地址，不再加1
                 target_pc_index = label_map[label_name]
 
@@ -43,7 +42,7 @@ def resolve_labels(expanded_lines, label_map):
                 temp_tokens = tokens[:-1] + [str(offset)]
                 resolved.append(' '.join(temp_tokens))
 
-        # `la` 伪指令展开成的 `lui` 指令也需要解析标签
+        # 伪指令`la` 展开成的 `lui` 指令也需要解析标签
         elif instr == 'lui':
             if len(tokens) < 3:
                 raise ValueError(f"格式错误的 LUI 指令: '{line}' at expanded index {idx}")
@@ -54,8 +53,10 @@ def resolve_labels(expanded_lines, label_map):
                 temp_tokens = list(tokens)
                 temp_tokens[2] = f'0x{label_value:X}' # 替换为十六进制地址
                 resolved.append(' '.join(temp_tokens))
+
             else:
                 resolved.append(line) # 如果不是标签，直接通过
+
         else:
             # 其他所有指令直接通过
             resolved.append(line)
@@ -65,8 +66,8 @@ def resolve_labels(expanded_lines, label_map):
 
 class Simulator16Bit:
     def __init__(self):
-        self.registers = [0] * 16  # r0 to r15
-        self.memory = ["0000_0000_0000_0000"] * 16384 # Memory for 512 words (16-bit each)
+        self.registers = [0] * 16  # r0 到 r15
+        self.memory = ["0000_0000_0000_0000"] * 16384 # 内存大小,16384,即 0x4000
         self.pc = 0
         self.previous_pc = 0
         self.halted = False
@@ -93,16 +94,20 @@ class Simulator16Bit:
     def get_reg_value(self, reg_idx):
         if not (0 <= reg_idx <= 15):
             raise ValueError(f"Invalid register index: {reg_idx}")
+
         if reg_idx == register_alias['r0']: # 确保 r0 为 0
             return 0
+
         return self.registers[reg_idx]
 
     def set_reg_value(self, reg_idx, value):
         if not (0 <= reg_idx <= 15):
             raise ValueError(f"Invalid register index: {reg_idx}")
+
         if reg_idx != register_alias['r0']: # r0 恒 0
-            # 值为 16 位，因此必要时模拟溢出
+            # 值为 16 位，必要时模拟溢出
             self.registers[reg_idx] = value & 0xFFFF # 确保 16 位
+
         else:
             self.registers[reg_idx] = 0 # r0 恒 0
 
@@ -110,24 +115,29 @@ class Simulator16Bit:
         # 将汇编代码转换为机器码，并将其存储在内部
         self.pc_to_source_line_map = [] # 重置映射
         self.machine_code = []      # 重置机器码存储
+
         try:
-            # 1. 解析标签 (使用修正后的 resolve_labels)
+            # 1. 解析标签 (使用 resolve_labels)
             resolved_instr_for_sim = resolve_labels(expanded_instr, label_map)
 
             self.pc_to_source_line_map = source_lines_for_expanded
 
             # 2. 组装 (使用 pseudo.py 的 assemble_line)
             raw_machine_code_for_sim = []
+
             for line_content in resolved_instr_for_sim:
+
                 if line_content.strip():
                     bin_code = pse.assemble_line(line_content.strip())
                     raw_machine_code_for_sim.append(bin_code)
 
-            # 3. 准备并加载到模拟器内存 (这部分逻辑与之前类似)
+            # 3. 准备并加载到模拟器内存
             rom_output_lines = []
             for i, code in enumerate(raw_machine_code_for_sim):
+
                 if i < 128: # 假设ROM大小为256
                     rom_output_lines.append('_'.join([code[j:j+4] for j in range(0, 16, 4)]))
+
             while len(rom_output_lines) < 128:
                 rom_output_lines.append("0000_0000_0000_0000")
 
@@ -137,12 +147,13 @@ class Simulator16Bit:
             data_output_lines = []
             k = 0
             while k < len(data_lma_values):
-                # ... (处理 data_lma_values 的逻辑不变) ...
                 byte1_val = data_lma_values[k]; byte1_bin = format(byte1_val, '08b')
                 byte1_formatted = f"{byte1_bin[0:4]}_{byte1_bin[4:8]}"
+
                 if k + 1 < len(data_lma_values):
                     byte2_val = data_lma_values[k+1]; byte2_bin = format(byte2_val, '08b')
                     byte2_formatted = f"{byte2_bin[0:4]}_{byte2_bin[4:8]}"
+
                 else:
                     byte2_formatted = "0000_0000"
                 data_output_lines.append(f"{byte1_formatted}_{byte2_formatted}")
@@ -155,6 +166,7 @@ class Simulator16Bit:
             self.pc = 0
             self.halted = False
             return True, "汇编成功 (模拟器已加载修正版代码)."
+
         except Exception as e:
             self.machine_code = []
             self.pc_to_source_line_map = []
@@ -168,18 +180,21 @@ class Simulator16Bit:
             if i < len(self.memory): # 防止超出预设的 self.memory 大小
                 # 移除下划线，得到纯二进制字符串
                 raw_binary_word = formatted_code_word.replace('_', '')
+
                 if len(raw_binary_word) == 16 and all(c in '01' for c in raw_binary_word):
                     self.memory[i] = raw_binary_word
+
                 else:
                     print(f"警告: 机器码 \"{formatted_code_word}\" 格式不正确，跳过加载到内存地址 {i}")
-                    self.memory[i] = "0000000000000000" # 或其他错误标记
+                    self.memory[i] = "0000000000000000" # 或者其他错误标记
+
             else:
                 print(f"警告: 机器码数量 ({len(self.machine_code)}) 超出内存容量 ({len(self.memory)})。部分代码未加载。")
                 break
         # print(f"Loaded to memory: {self.memory[:5]}")
 
-        # 如果 self.machine_code 比 self.memory 短，内存中剩余部分将保持其旧值或初始值。
-        # 如果需要用0填充剩余内存：
+        # 如果 self.machine_code 比 self.memory 短，内存中剩余部分将保持其旧值或初始值
+        # 如果需要用0填充剩余内存
         for i in range(len(self.machine_code), len(self.memory)):
             self.memory[i] = "0000000000000000"
 
@@ -190,8 +205,9 @@ class Simulator16Bit:
             self.halted = True
             return None
         instruction_word = self.memory[self.pc]
+
         # print(f"Fetched PC={self.pc}: {instruction_word}")
-        return instruction_word # Should be "XXXXXXXXXXXXXXXX"
+        return instruction_word # 形式:"XXXXXXXXXXXXXXXX"
 
     def decode_and_execute(self, instruction_word):
     # 解码并执行单条16位指令字 (字符串格式 "XXXXXXXXXXXXXXXX")。
@@ -211,8 +227,8 @@ class Simulator16Bit:
             # Opcode 总是最后4位 (bits 3-0)
             opcode = instruction_word[12:16]
 
-            # --- R-type: add, sub, and, or ---
-            # 格式(编码): rs2(4) + rs1(4) + rd(4) + opcode(4)
+            #  R-type: add, sub, and, or
+            # 格式: rs2(4) + rs1(4) + rd(4) + opcode(4)
             if opcode in [self.OPCODE_MAP['add'], self.OPCODE_MAP['sub'], self.OPCODE_MAP['and'], self.OPCODE_MAP['or']]:
                 rs2_bin = instruction_word[0:4]
                 rs1_bin = instruction_word[4:8]
@@ -228,8 +244,8 @@ class Simulator16Bit:
                 elif opcode == self.OPCODE_MAP['or']:  result = rs1_val | rs2_val
                 self.set_reg_value(rd, result)
 
-            # --- I-type (算术/逻辑): addi, subi ---
-            # 格式(编码): imm(4) + rs1(4) + rd(4) + opcode(4)
+            #  I-type (算术): addi, subi
+            # 格式: imm(4) + rs1(4) + rd(4) + opcode(4)
             elif opcode in [self.OPCODE_MAP['addi'], self.OPCODE_MAP['subi']]:
                 imm_bin = instruction_word[0:4]
                 rs1_bin = instruction_word[4:8]
@@ -243,8 +259,8 @@ class Simulator16Bit:
                 elif opcode == self.OPCODE_MAP['subi']: result = rs1_val - imm_val
                 self.set_reg_value(rd, result)
 
-            # --- I-type (加载): lw, lb ---
-            # 格式(编码): imm(4) + rs1(4) + rd(4) + opcode(4)
+            #  I-type (加载): lw, lb
+            # 格式: imm(4) + rs1(4) + rd(4) + opcode(4)
             elif opcode in [self.OPCODE_MAP['lb'], self.OPCODE_MAP['lw']]:
                 imm_bin = instruction_word[0:4]
                 rs1_bin = instruction_word[4:8]
@@ -263,6 +279,7 @@ class Simulator16Bit:
                 # print(f"  计算出的源内存地址: 0x{mem_addr:04X}")
 
                 word_addr = mem_addr // 2
+
                 if not (0 <= word_addr < len(self.memory)):
                     print(f"  错误: 源地址 0x{word_addr:04X} 超出内存范围！")
                     self.halted = True; return
@@ -306,6 +323,7 @@ class Simulator16Bit:
                 # print(f"  计算出的目标内存地址: 0x{mem_addr:04X}")
 
                 word_addr = mem_addr // 2
+
                 if not (0 <= word_addr < len(self.memory)):
                     print(f"  错误: 目标地址 0x{word_addr:04X} 超出内存范围！")
                     self.halted = True; return
@@ -326,8 +344,8 @@ class Simulator16Bit:
                 # print(f"  写入后，内存字地址 0x{word_addr:04X} 的内容: '{self.memory[word_addr]}'")
                 # print("--- DEBUG: 存储指令执行完毕 ---\n")
 
-            # --- SB-type (分支): beq, ble ---
-            # 格式(编码): rs2(4) + rs1(4) + imm(4) + opcode(4)
+            #  SB-type (分支): beq, ble
+            # 格式: rs2(4) + rs1(4) + imm(4) + opcode(4)
             elif opcode in [self.OPCODE_MAP['beq'], self.OPCODE_MAP['ble']]:
                 rs2_bin = instruction_word[0:4]
                 rs1_bin = instruction_word[4:8]
@@ -337,14 +355,15 @@ class Simulator16Bit:
                 offset = self.signed_int(imm_bin, 4) # 4位有符号指令偏移
 
                 branch_taken = False
+
                 if opcode == self.OPCODE_MAP['beq'] and rs1_val == rs2_val: branch_taken = True
                 elif opcode == self.OPCODE_MAP['ble'] and rs1_val <= rs2_val: branch_taken = True
 
                 if branch_taken:
                     next_pc = (self.pc + 1 + offset) & 0xFFFF
 
-            # --- U-type: lui ---
-            # 格式(编码): imm(8) + rd(4) + opcode(4)
+            #  U-type: lui
+            # 格式: imm(8) + rd(4) + opcode(4)
             elif opcode == self.OPCODE_MAP['lui']:
                 imm_bin = instruction_word[0:8]
                 rd_bin  = instruction_word[8:12]
@@ -352,8 +371,8 @@ class Simulator16Bit:
                 imm_val = int(imm_bin, 2) # 无符号立即数
                 self.set_reg_value(rd, imm_val << 8)
 
-            # --- UJ-type: jal ---
-            # 格式(编码): imm(8) + rd(4) + opcode(4)
+            #  UJ-type: jal
+            # 格式: imm(8) + rd(4) + opcode(4)
             elif opcode == self.OPCODE_MAP['jal']:
                 imm_bin = instruction_word[0:8]
                 rd_bin  = instruction_word[8:12]
@@ -368,8 +387,8 @@ class Simulator16Bit:
                 # 模拟器中执行时，只需应用该偏移： next_pc = current_pc + 1 + offset
                 next_pc = (self.pc + 1 + offset) & 0xFFFF
 
-            # --- I-type: jalr ---
-            # 格式(编码): imm(4) + rs1(4) + rd(4) + opcode(4)
+            #  I-type: jalr
+            # 格式: imm(4) + rs1(4) + rd(4) + opcode(4)
             elif opcode == self.OPCODE_MAP['jalr']:
                 imm_bin = instruction_word[0:4]
                 rs1_bin = instruction_word[4:8]
@@ -401,15 +420,16 @@ class Simulator16Bit:
 
 
     def signed_int(self, binary_string, bits):
-        #二进制补码转换为有符号整数
+        # 二进制补码转换为有符号整数
         val = int(binary_string, 2)
+
         if (val & (1 << (bits - 1))) != 0: # 若设置了符号位
             val = val - (1 << bits)        # 计算负值
         return val
 
     def step(self):
-        # 执行单步操作。
-        # 如果成功执行一条指令，则返回 True。如果模拟器已停止或无法执行，则返回 False。
+        # 执行单步操作
+        # 如果成功执行一条指令，则返回 True;如果模拟器已停止或无法执行，则返回 False
 
         # 1. 执行前检查状态
         if self.halted:
@@ -425,26 +445,28 @@ class Simulator16Bit:
         self.previous_pc = self.pc
         # 2. 获取并执行指令
         instruction = self.fetch()
+
         if instruction:
             # decode_and_execute 会在内部处理执行，并可能在出错时设置 self.halted = True
             self.decode_and_execute(instruction)
 
             # 3. 返回正确的状态
-            # 只要 fetch 成功，我们就认为这一步是“尝试过”的。
-            # simulator 是否应该继续，取决于执行后 self.halted 的状态。
-            # step() 的返回值应该表明“本次step是否成功启动”。
-            # decode_and_execute 出错会设置 halted，但本次 step 本身是成功发起的。
-            # 为了让主循环的逻辑更清晰，在这里直接检查 halted 状态。
+            # 只要 fetch 成功，就认为这一步是“尝试过”的
+            # simulator 是否继续，取决于执行后 self.halted 的状态
+            # step() 的返回值表明“本次step是否成功启动”
+            # decode_and_execute 出错会设置 halted，但本次 step 本身是成功发起的
+            # 为了让主循环的逻辑更清晰，这里直接检查 halted 状态
             if self.halted:
                 return False # 如果 decode_and_execute 内部导致了停止，则返回 False
+
             else:
                 return True # 否则，成功执行一步，返回 True
         else:
-            # Fetch 失败通常意味着PC有问题
+            # Fetch 失败说明着PC有问题
             self.halted = True
             return False
 
-    def run_program(self, max_steps=1000): # 添加 max_steps 防无限循环
+    def run_program(self, max_steps=1000): # max_steps 防无限循环
         print("Running program...")
 
         time.sleep(0.3) # 延迟0.3s
@@ -454,6 +476,7 @@ class Simulator16Bit:
             if not self.step(): # 返回 False，如果步骤停止
                 break
             steps += 1
+
         if steps >= max_steps:
             print(f"Halted: Reached max execution steps ({max_steps}).")
             self.halted = True
@@ -488,14 +511,13 @@ class App:
 
         import tkinter.font as tkFont
 
-        # 这里似乎要定义字体
-
+        # 定义字体
         self.base_font_family = "Courier New"
         self.base_font_size = 12
         # self.code_font 用于 tk.Text 组件本身的基础字体
         self.actual_code_font = tkFont.Font(family=self.base_font_family,size=self.base_font_size)
 
-        # UI 元素 (标签、按钮等) 使用的字体 (如果需要，但当前错误与此无关)
+        # UI 元素 (标签、按钮等) 使用的字体
         self.ui_font_family = "Arial"
         self.ui_font_size = 12
         self.ui_font = (self.ui_font_family, self.ui_font_size)
@@ -505,22 +527,21 @@ class App:
         if hasattr(pse, 'reg_num_to_name'):
             self.reg_num_to_name = pse.reg_num_to_name
         else:
-            # 如果 pse 模块中没有，则在本地创建一个备用的
             self.reg_num_to_name = {i: f'r{i}' for i in range(16)}
 
         self.is_running_continuously = False # 追踪是否处于连续执行状态
         self._continuous_run_job = None      # 用于 after 方法的ID
         self.run_step_counter = 0
 
-        # --- 语法高亮：定义标签名称列表 (只包含当前需要的) ---
+        #  语法高亮：定义标签名称列表
         self.highlight_tags = [
             'comment_tag',
             'instruction_tag',
             'pseudo_instruction_tag',
             'register_tag'
-        ] # 之后可以按需添加 'immediate_tag', 'label_def_tag', 'directive_tag'
+        ]
 
-        # 新增：断点相关初始化
+        # 断点初始化
         self.breakpoints = set() # 存储设置了断点的源文件行号 (1-based)
 
         main_frame = ttk.Frame(root, padding=(5, 2, 5, 5))
@@ -528,7 +549,7 @@ class App:
         root.columnconfigure(0, weight=1)
         root.rowconfigure(0, weight=1)
 
-        # 新增：用于追踪内存视图起始地址的属性
+        # 追踪内存视图起始地址的属性
         self.memory_view_start_addr = 0
 
         #    代码编辑区和行号区
@@ -547,9 +568,9 @@ class App:
         self.line_numbers_text = tk.Text(code_area_frame, width=4, padx=1, takefocus=0, borderwidth=0,background='lightgrey', state='disabled', wrap='none',font=self.actual_code_font,spacing1=0, spacing2=0, spacing3=0)
         self.line_numbers_text.grid(row=1, column=0, sticky='ns')
 
-        # 新增：为行号区绑定点击事件
+        # 行号区绑定点击事件
         self.line_numbers_text.bind("<Button-1>", self.on_line_number_click)
-        # 新增：为行号区的断点标记配置一个tag
+        # 行号区的断点标记配置一个tag
         self.line_numbers_text.tag_configure("breakpoint_set_marker", foreground="red", font=self.actual_code_font)
 
         # 代码编辑区 (tk.Text)
@@ -563,22 +584,18 @@ class App:
         # 关联滚动条和文本区
         self.code_text.config(yscrollcommand=self._on_text_scroll)
 
-        #水平滚动条
+        # 水平滚动条
         self.h_scrollbar = ttk.Scrollbar(code_area_frame, orient="horizontal", command=self.code_text.xview)
         self.h_scrollbar.grid(row=2, column=1, sticky='ew') # 放置在代码编辑区下方，只作用于代码区
 
         self.code_text.config(xscrollcommand=self.h_scrollbar.set)
 
         # 语法高亮：配置标签颜色和字体
-        # 注释：绿色斜体（italic） 指令：蓝色加粗（bold)  寄存器：红色
+        # 注释：绿色  指令：蓝色加粗  寄存器：红色
         self.code_text.tag_configure('comment_tag', foreground='green', font=self.actual_code_font)
         self.code_text.tag_configure('instruction_tag', foreground='blue', font=self.actual_code_font)
-        self.code_text.tag_configure('pseudo_instruction_tag', foreground='blue',font=self.actual_code_font) # 深蓝
+        self.code_text.tag_configure('pseudo_instruction_tag', foreground='blue',font=self.actual_code_font)
         self.code_text.tag_configure('register_tag', foreground='red', font=self.actual_code_font)
-        # 如果以后添加其他高亮:
-        # self.code_text.tag_configure('immediate_tag', foreground='dark orange', font=self.code_font)
-        # self.code_text.tag_configure('label_def_tag', foreground='dark red', font=(self.code_font_family, self.code_font_size, 'bold'))
-        # self.code_text.tag_configure('directive_tag', foreground='magenta', font=(self.code_font_family, self.code_font_size, 'bold'))
 
         # 语法高亮：绑定事件
         # on_text_change 会调用 _schedule_highlighting
@@ -601,14 +618,19 @@ class App:
 
         self.load_btn = ttk.Button(controls_frame, text="导入文件", command=self.load_file)
         self.load_btn.pack(side=tk.LEFT, padx=2)
+
         self.assemble_btn = ttk.Button(controls_frame, text="汇编", command=self.assemble_code)
         self.assemble_btn.pack(side=tk.LEFT, padx=2)
+
         self.step_btn = ttk.Button(controls_frame, text="单步", command=self.step_code, state=tk.DISABLED)
         self.step_btn.pack(side=tk.LEFT, padx=2)
+
         self.run_btn = ttk.Button(controls_frame, text="执行", command=self.run_code, state=tk.DISABLED)
         self.run_btn.pack(side=tk.LEFT, padx=2)
+
         self.stop_btn = ttk.Button(controls_frame, text="停止", command=self.stop_continuous_run, state=tk.DISABLED)
         self.stop_btn.pack(side=tk.LEFT, padx=2)
+
         self.reset_btn = ttk.Button(controls_frame, text="重置", command=self.reset_simulator, state=tk.DISABLED)
         self.reset_btn.pack(side=tk.LEFT, padx=2)
 
@@ -618,14 +640,12 @@ class App:
         self.status_label = ttk.Label(code_area_frame, text="已就绪", relief=tk.SUNKEN, anchor=tk.W)
         self.status_label.grid(row=4, column=0, columnspan=3, sticky=(tk.W, tk.E), pady=(5,0))
 
-        # --- 当前执行行高亮：定义标签 ---
+        #  当前执行行高亮：定义标签
         if hasattr(self, 'code_text'): # 良好的健壮性检查
             self.code_text.tag_configure('current_execution_line_tag', background='yellow')
 
-        # !!! 新增/确保此行存在且在 update_ui_state() 调用之前 !!!
+        # 在 update_ui_state() 调用之前
         self.current_highlighted_tk_line = None # 存储当前高亮的Tkinter行号 (1-based)
-
-        # ... (其余的 __init__ 代码，例如语法高亮模式定义, _line_number_update_job, _highlight_job 初始化) ...
 
         self._line_number_update_job = None
         self._highlight_job = None
@@ -656,10 +676,11 @@ class App:
             display_text = ""
             # 2. 判断这个别名是否以 'a' 开头
             if primary_alias.startswith('a'):
-                # 3a. 如果是 'a' 系列寄存器，则构建 "aX (rY):" 格式的字符串
+                # 如果是 'a' 系列寄存器，则构建 "aX (rY):" 格式的字符串
                 display_text = f"{primary_alias} (r{i}):"
+
             else:
-                # 3b. 否则 (如 r0, ra, sp)，只显示别名
+                # 否则 (如 r0, ra, sp)，只显示r
                 display_text = f"r{i}:"
 
             # 4. 创建标签，并使用 f-string 的左对齐格式化，确保所有冒号都能对齐
@@ -670,7 +691,7 @@ class App:
             self.reg_labels[i] = ttk.Label(self.reg_frame, text="0 (0x0000)", width=18, relief=tk.GROOVE, anchor=tk.W)
             self.reg_labels[i].grid(row=i, column=1, sticky=tk.W, padx=2, pady=1)
 
-
+        # # pc计数器
         # self.pc_label_title = ttk.Label(self.reg_frame, text="PC:")
         # self.pc_label_title.grid(row=16, column=0, sticky=tk.W, padx=2, pady=(5,1))
         # self.pc_label_val = ttk.Label(self.reg_frame, text="0 (0x0000)", width=18, relief=tk.GROOVE, anchor=tk.W)
@@ -678,14 +699,14 @@ class App:
 
         ttk.Label(right_pane, text="内存视图:").grid(row=0, column=1, sticky=tk.NW, padx=(5,0), pady=(0,2))
 
-        self.mem_frame = ttk.Frame(right_pane) # 父组件是 right_pane
+        self.mem_frame = ttk.Frame(right_pane) # 父组件:right_pane
         self.mem_frame.grid(row=1, column=1, sticky='nsew', padx=(5,0)) # 占据第1行，第1列
 
         # 让 mem_frame 内部的文本区可以扩展
         self.mem_frame.rowconfigure(2, weight=1)
         self.mem_frame.columnconfigure(0, weight=1)
 
-        # 新增：地址跳转的UI组件
+        # 地址跳转的UI组件
         mem_nav_frame = ttk.Frame(self.mem_frame)
         mem_nav_frame.grid(row=0, column=0, columnspan=2, sticky='ew', pady=(0,5))
 
@@ -695,13 +716,13 @@ class App:
         self.mem_addr_entry.insert(0, "1000") # 默认显示地址 0x1000
         ttk.Button(mem_nav_frame, text="跳转", command=self.go_to_memory_address).pack(side=tk.LEFT, padx=2)
 
-        # 新增：内存显示文本区 (tk.Text)
+        # 内存显示文本区 (tk.Text)
         self.memory_display_text = tk.Text(self.mem_frame, wrap='none', undo=False, # undo通常对显示区不需要
-                                           font=self.actual_code_font, # 使用之前定义的等宽字体
-                                           width=27) # 初始宽度，可以调整
+                                           font=self.actual_code_font, # 使用之前定义的字体
+                                           width=27) # 宽度
         self.memory_display_text.grid(row=1, column=0, sticky='nsew')
 
-        # 新增：内存显示区的垂直滚动条
+        # 内存显示区的垂直滚动条
         mem_v_scrollbar = ttk.Scrollbar(self.mem_frame, orient="vertical", command=self.memory_display_text.yview)
         mem_v_scrollbar.grid(row=1, column=1, sticky='ns')
         self.memory_display_text.config(yscrollcommand=mem_v_scrollbar.set)
@@ -719,11 +740,11 @@ class App:
 
         self._line_number_update_job = None # 用于延迟更新行号
         self._highlight_job = None
-        self.is_running_continuously = False # For continuous run
-        self._continuous_run_job = None    # For continuous run
+        self.is_running_continuously = False # 连续运行
+        self._continuous_run_job = None
 
 
-        self._highlight_job = None # 用于延迟高亮
+        self._highlight_job = None # 延迟高亮
 
         if hasattr(self, 'code_text'):
             self.code_text.tag_configure('current_execution_line_tag', background='yellow')
@@ -749,6 +770,7 @@ class App:
             self.highlight_order = [
                 'comment_tag', 'instruction_tag', 'pseudo_instruction_tag', 'register_tag'
             ]
+
         else:
             self.highlight_patterns = {}; self.highlight_order = []
 
@@ -757,7 +779,7 @@ class App:
         if hasattr(self, 'apply_syntax_highlighting'):
             self.apply_syntax_highlighting()
 
-        # --- 初始化UI状态和首次加载 ---
+        # 初始化UI状态和首次加载
         self.update_ui_state()
         self.update_line_numbers()
         self.go_to_memory_address()
@@ -769,7 +791,7 @@ class App:
             self.load_file(filepath=hardcoded_filepath)
 
     def on_line_number_click(self, event):
-        """处理行号区域的点击事件，用于切换断点。"""
+        # 处理行号区域的点击事件，用于切换断点
         try:
             # 获取点击位置对应的行号 (1-based)
             # index = self.line_numbers_text.index(f"@{event.x},{event.y}")
@@ -778,10 +800,10 @@ class App:
 
             # 更可靠的方式是基于 y 计算，因为行号区宽度固定，x 可能不准
             # 或者，如果行号是简单地每行一个数字，可以用 dlineinfo
-            # 我们假设行号区每行就是一个数字加换行
+            # 假设行号区每行就是一个数字加换行
             # index = self.line_numbers_text.index(f"@0,{event.y}") # 用x=0确保在行首
 
-            # 一个更简单的方式是获取当前鼠标y坐标下的行开始
+            # 或者获取当前鼠标y坐标下的行开始
             # self.line_numbers_text.mark_set("click_pos", f"@{event.x},{event.y}")
             # line_start_index = self.line_numbers_text.index("click_pos linestart")
 
@@ -795,10 +817,12 @@ class App:
                 if clicked_line_num in self.breakpoints:
                     self.breakpoints.remove(clicked_line_num)
                     print(f"断点已移除: 第 {clicked_line_num} 行")
+
                 else:
                     self.breakpoints.add(clicked_line_num)
                     print(f"断点已设置: 第 {clicked_line_num} 行")
                 self._redraw_line_numbers() # 更新行号区的显示以反映断点变化
+
             else:
                 print(f"无效的断点行: {clicked_line_num} (总代码行数: {code_lines})")
 
@@ -813,7 +837,7 @@ class App:
         return "break" # 阻止 Text 组件的默认点击行为（例如移动光标）
 
     def _redraw_line_numbers(self, event=None):
-        """更新行号区域的显示，并标记断点。"""
+        # 更新行号区域的显示，并标记断点
 
         # # 调试
         # print(f"--- DEBUG: _redraw_line_numbers 被调用. 当前断点: {self.breakpoints} ---")
@@ -830,9 +854,9 @@ class App:
         max_digits = len(str(lines)) if lines > 0 else 1
 
         # 宽度至少能容纳 max_digits 个字符，或者一个 "●" 加上可能的对齐空格
-        # 我们仍然以 max_digits 为基准宽度，让 "●" 也尽量对齐
+        # 以 max_digits 为基准宽度，让 "●" 也尽量对齐
         display_width = max_digits
-        self.line_numbers_text.config(width=display_width + 1) # 加1是为了左右的一点点边距感或防止字符粘连
+        self.line_numbers_text.config(width=display_width + 1) # 加1,为了美感
 
         if lines > 0:
             for i in range(1, lines + 1):
@@ -843,6 +867,7 @@ class App:
                     # 用 "●" 代替数字，并用空格使其右对齐，占据 max_digits 宽度
                     line_display_content = "●".rjust(max_digits)
                     apply_breakpoint_tag = True
+
                 else:
                     line_display_content = str(i).rjust(max_digits) # 数字右对齐
 
@@ -866,13 +891,13 @@ class App:
         self._scroll_sync_y()
 
     def _schedule_highlighting(self):
-        """安排语法高亮任务，带延迟。"""
+        # 安排语法高亮任务，带延迟
         if self._highlight_job:
             self.root.after_cancel(self._highlight_job)
         self._highlight_job = self.root.after(200, self.apply_syntax_highlighting) # 200ms 延迟
 
     def apply_syntax_highlighting(self):
-        """应用语法高亮到代码编辑区。"""
+        # 应用语法高亮到代码编辑区
         if not hasattr(self, 'code_text') or not self.code_text.winfo_exists():
             return # 如果组件还不存在或已销毁，则不执行
 
@@ -887,17 +912,15 @@ class App:
             pattern = self.highlight_patterns.get(tag_name)
             if not pattern: continue
 
-            flags = re.IGNORECASE # <--- 这个保持不变 (除非特定模式如注释不需要)
-            # 如果 comment_tag 不需要忽略大小写，可以这样：
-            # current_flags = flags if tag_name != 'comment_tag' else 0
+            flags = re.IGNORECASE
 
-            for match in re.finditer(pattern, content, flags): # 使用调整后的 flags
+            for match in re.finditer(pattern, content, flags):
                 start_index = f"1.0 + {match.start()} chars"
                 end_index = f"1.0 + {match.end()} chars"
                 self.code_text.tag_add(tag_name, start_index, end_index)
 
     def on_text_modified(self, event=None):
-        """当文本框内容被修改时（例如，undo/redo/paste），安排行号和高亮更新。"""
+        # 当文本框内容被修改时（例如，undo/redo/paste），安排行号和高亮更新
         if self.code_text.edit_modified():
             # 更新行号
             if self._line_number_update_job:
@@ -910,7 +933,7 @@ class App:
             self.code_text.edit_modified(False) # 重置修改标志
 
     def on_text_change(self, event=None):
-        """按键释放时，安排行号和高亮更新。"""
+        # 按键释放时，安排行号和高亮更新
         # 更新行号
         if self._line_number_update_job:
             self.root.after_cancel(self._line_number_update_job)
@@ -954,8 +977,8 @@ class App:
     #     print("--- 行度量信息调试结束 ---\n")
 
     def load_file(self, filepath=None):
-    # 加载汇编文件到代码编辑区。
-    # 如果提供了 filepath 参数，则直接加载该文件。否则，弹出文件选择对话框。
+    # 加载汇编文件到代码编辑区
+    # 如果提供了 filepath 参数，则直接加载该文件;否则，弹出文件选择对话框
 
         chosen_filepath = filepath  # 使用传入的路径（如果存在）
 
@@ -973,9 +996,10 @@ class App:
                 self.code_text.edit_modified(False)
                 self.status_label.config(text=f"已加载: {chosen_filepath}")
                 self._redraw_line_numbers()
+
                 if hasattr(self, 'apply_syntax_highlighting'): # 如果有语法高亮功能
                     self.apply_syntax_highlighting()
-                # 成功加载并高亮后，可以考虑自动汇编 (可选)
+                # # 成功加载并高亮后，可以自动汇编
                 # self.assemble_code()
 
                 # # 调试
@@ -985,7 +1009,7 @@ class App:
                 self.status_label.config(text=f"错误: 文件未找到 '{chosen_filepath}'")
             except Exception as e:
                 self.status_label.config(text=f"加载文件错误: {e}")
-        # else: # 如果用户取消了文件对话框，或者传入的filepath无效但没有弹窗，则不执行任何操作
+        # else: # 如果取消了文件对话框，或者传入的filepath无效但没有弹窗，则不执行任何操作
         # self.status_label.config(text="加载操作已取消或路径无效")
 
     def _update_current_line_highlight(self):
@@ -997,6 +1021,7 @@ class App:
                 line_start = f"{self.current_highlighted_tk_line}.0"
                 line_end = f"{self.current_highlighted_tk_line}.end lineend" #确保整行背景
                 self.code_text.tag_remove('current_execution_line_tag', line_start, line_end)
+
             except tk.TclError:
                 pass # 如果行不存在或标签移除出错，忽略
         self.current_highlighted_tk_line = None
@@ -1004,6 +1029,7 @@ class App:
         # 2. 应用新的高亮
         if not self.simulator.halted and hasattr(self.simulator, 'pc_to_source_line_map') and self.simulator.pc_to_source_line_map:
             current_pc = self.simulator.previous_pccurrent_pc = self.simulator.previous_pc
+
             if 0 <= current_pc < len(self.simulator.pc_to_source_line_map):
                 source_line_num_1_based = self.simulator.pc_to_source_line_map[current_pc]
 
@@ -1015,6 +1041,7 @@ class App:
                         self.code_text.tag_add('current_execution_line_tag', line_start_index, line_end_index)
                         # self.code_text.see(line_start_index) # 滚动到该行使其可见，但是会抢占控制权
                         self.current_highlighted_tk_line = source_line_num_1_based
+
                     except tk.TclError as e:
                         print(f"高亮错误: 无法高亮行 {source_line_num_1_based} (PC={current_pc}): {e}")
             # else:
@@ -1022,7 +1049,7 @@ class App:
 
 
     def _update_button_states(self):
-        """根据模拟器和运行状态更新所有控制按钮的可用性。"""
+        # 根据模拟器和运行状态更新所有控制按钮的可用性
         if self.is_running_continuously: # 正在连续执行
             self.run_btn.config(state=tk.DISABLED)
             self.step_btn.config(state=tk.DISABLED)
@@ -1030,6 +1057,7 @@ class App:
             self.load_btn.config(state=tk.DISABLED)
             self.reset_btn.config(state=tk.DISABLED)
             self.stop_btn.config(state=tk.NORMAL)
+
         else: # 已停止、暂停、或未开始
             # 检查是否有已加载的机器码并且模拟器没有因为错误而永久停止
             can_run_or_step = not self.simulator.halted and \
@@ -1050,22 +1078,24 @@ class App:
         self.update_line_numbers()
         self.apply_syntax_highlighting() # 汇编前确保高亮
 
-        # --- 步骤 1: 扩展伪指令 (只做一次) ---
+        # 1. 扩展伪指令 (只做一次)
         asm_code = self.code_text.get('1.0', tk.END)
         asm_lines = asm_code.splitlines()
+
         try:
             expanded_instr, label_map, data_lma_values, source_lines_for_expanded = \
                 pse.expand_pseudo_instructions(asm_lines)
+
         except Exception as e:
             self.status_label.config(text=f"汇编错误 (扩展阶段): {e}")
             return
 
-        # --- 步骤 2: 生成用于输出文件的机器码 (使用 pseudo.py 的 +1 逻辑) ---
+        # 2. 生成用于输出文件的机器码 (使用 pseudo.py 的 +1 逻辑)
         try:
             resolved_for_file = pse.resolve_labels(expanded_instr, label_map)
             raw_mc_for_file = [pse.assemble_line(line.strip()) for line in resolved_for_file if line.strip()]
 
-            # 格式化并写入文件 (这段逻辑可以从 pseudo.py 的 if __name__ 块中借鉴)
+            # 格式化并写入文件 (这段来自 pseudo.py 的 if __name__ 块)
             rom_lines = ['_'.join([c[j:j+4] for j in range(0,16,4)]) for c in raw_mc_for_file[:128]]
             while len(rom_lines) < 128: rom_lines.append("0000_0000_0000_0000") # 假设ROM为128
 
@@ -1074,6 +1104,7 @@ class App:
             while k < len(data_lma_values):
                 b1 = data_lma_values[k]; b1_f = f"{format(b1,'08b')[0:4]}_{format(b1,'08b')[4:8]}"
                 b2_f = "0000_0000"
+
                 if k + 1 < len(data_lma_values):
                     b2 = data_lma_values[k+1]; b2_f = f"{format(b2,'08b')[0:4]}_{format(b2,'08b')[4:8]}"
                 data_lines.append(f"{b1_f}_{b2_f}"); k+=2
@@ -1081,11 +1112,12 @@ class App:
             final_output_for_file = rom_lines + data_lines
             pse.write_machine_code_to_file(final_output_for_file, "machine_code_output.txt")
             print("--- 文件 machine_code_output.txt 已使用 pseudo.py 的原始逻辑生成 ---")
+
         except Exception as e:
             self.status_label.config(text=f"生成输出文件时出错: {e}")
             # 即使文件生成失败，我们仍然可以尝试加载模拟器
 
-        # --- 步骤 3: 加载修正后的代码到模拟器 ---
+        # 3. 加载修正后的代码到模拟器
         success, message = self.simulator.load_program_from_source(
             expanded_instr, label_map, data_lma_values, source_lines_for_expanded
         )
@@ -1113,8 +1145,10 @@ class App:
                 self.memory_view_start_addr = start_addr
                 self._update_memory_view()
                 self.status_label.config(text=f"内存视图已跳转到地址 0x{start_addr:X}")
+
             else:
                 self.status_label.config(text=f"错误: 地址 0x{start_addr:X} 超出内存范围")
+
         except ValueError:
             self.status_label.config(text=f"错误: 无效的十六进制地址 '{addr_str}'")
 
@@ -1133,11 +1167,13 @@ class App:
         # 统一处理代码区和行号区的鼠标滚轮事件。
         # 该方法会滚动主代码编辑区 self.code_text。
         # 行号区的同步将通过 self.code_text 的 yscrollcommand 触发的 _on_text_scroll 方法完成。        delta_scroll = 0
-        if event.num == 4:  # Linux 向上滚动
+        if event.num == 4:
             delta_scroll = -1
-        elif event.num == 5:  # Linux 向下滚动
+
+        elif event.num == 5:
             delta_scroll = 1
-        elif hasattr(event, 'delta') and event.delta != 0:  # Windows 和 macOS
+
+        elif hasattr(event, 'delta') and event.delta != 0:
             delta_scroll = -1 * (event.delta // 120)
 
         if delta_scroll != 0:
@@ -1196,7 +1232,7 @@ class App:
         # 滚动条的位置也应该被正确设置，这由 _on_text_scroll -> self.v_scrollbar.set() 完成
 
     def _update_memory_view(self):
-        """更新内存视图，确保每行正确显示一个字节及其对应的十进制值。"""
+        # 更新内存视图，确保每行正确显示一个字节及其对应的十进制值
         if not hasattr(self, 'memory_display_text') or not self.memory_display_text.winfo_exists():
             return
 
@@ -1207,7 +1243,7 @@ class App:
         if start_byte_addr % 2 != 0:
             start_byte_addr -= 1
 
-        num_bytes_to_show = 128 # 你可以按需调整显示的字节数
+        num_bytes_to_show = 128 # 按需调整显示的字节数
         end_byte_addr = min(start_byte_addr + num_bytes_to_show, len(self.simulator.memory) * 2)
 
         addr_width = 4
@@ -1216,8 +1252,6 @@ class App:
         for current_byte_addr in range(start_byte_addr, end_byte_addr):
             word_addr = current_byte_addr // 2
             byte_offset = current_byte_addr % 2
-
-            # --- 核心修正点在这里 ---
 
             word_binary = self.simulator.memory[word_addr]
             byte_binary = ""
@@ -1230,7 +1264,7 @@ class App:
 
                 # 2. 基于提取出的8位字节字符串来计算十进制值
                 try:
-                    # 注意：这里我们用 int(byte_binary, 2) 而不是 int(word_binary, 2)
+                    # 注意：用 int(byte_binary, 2) 而不是 int(word_binary, 2)
                     decimal_value = int(byte_binary, 2)
                 except (ValueError, TypeError):
                     decimal_value = "N/A"
@@ -1246,11 +1280,10 @@ class App:
 
 
     def update_ui_state(self, is_continuous_run=False):
-        """
-        根据模拟器的当前状态更新所有UI元素。
-        is_continuous_run: 一个布尔值，用于判断当前是否处于连续执行模式。
-        """
-        # 1. 更新寄存器和PC （这些开销小，总是更新）
+        # 根据模拟器的当前状态更新所有UI元素
+        # is_continuous_run: 一个布尔值，用于判断当前是否处于连续执行模式
+
+        # 1. 更新寄存器和PC （开销小，总是更新）
         for i in range(16):
             val = self.simulator.get_reg_value(i)
             self.reg_labels[i].config(text=f"{val} (0x{val:04X})")
@@ -1259,13 +1292,14 @@ class App:
 
         # 2. 有条件地更新内存视图
         if not is_continuous_run:
-            # 如果是单步执行、暂停、或程序结束时，我们总是完整刷新内存视图
+            # 如果是单步执行、暂停、或程序结束时，总是完整刷新内存视图
             if hasattr(self, '_update_memory_view'):
                 self._update_memory_view()
+
         else:
             # 如果是连续执行模式，我们只定期刷新内存视图以提升性能
             self.run_step_counter += 1
-            # 每隔20步更新一次内存，你可以按需调整这个数字
+            # 20 刷新一次,好像实现,但是祖宗之法不可变
             if self.run_step_counter % 20 == 0:
                 if hasattr(self, '_update_memory_view'):
                     self._update_memory_view()
@@ -1282,6 +1316,7 @@ class App:
     def step_code(self):
         if self.simulator.step():
             self.status_label.config(text=f"已单步执行. PC = {self.simulator.pc}")
+
         else:
             self.status_label.config(text="模拟器已停止")
         self.update_ui_state()
@@ -1297,7 +1332,7 @@ class App:
         # print(f"--- DEBUG: run_code - 'is_running_continuously' 设置为 {self.is_running_continuously} ---")
 
         self.status_label.config(text="正在连续执行...")
-        self._update_button_states() # 立即禁用“执行”、“单步”等，启用“停止”
+        self._update_button_states() # 禁用“执行”、“单步”等，启用“停止”
         self._execute_next_instruction_in_run_mode()
 
 
@@ -1307,6 +1342,7 @@ class App:
         # 1. 检查是否应该停止连续执行 (由用户点击停止、模拟器已停止、或断点触发)
         if not self.is_running_continuously or self.simulator.halted:
             self.is_running_continuously = False # 确保标志位正确
+
             if self._continuous_run_job:
                 self.root.after_cancel(self._continuous_run_job)
                 self._continuous_run_job = None
@@ -1316,9 +1352,11 @@ class App:
             current_status = self.status_label.cget("text")
             if "暂停" not in current_status and "停止" not in current_status:
                 final_status = "模拟器已停止."
+
                 if self.simulator.halted:
-                    # 尝试给出更具体的停止原因
+                    # 给出更具体的停止原因
                     is_at_end = False
+
                     if self.simulator.pc >= len(self.simulator.pc_to_source_line_map):
                         is_at_end = True
 
@@ -1328,20 +1366,21 @@ class App:
                         final_status = "模拟器因错误或未知原因停止."
                 self.status_label.config(text=final_status)
 
-            self._update_button_states() # <--- 统一由这个方法更新所有按钮
+            self._update_button_states() # 更新所有按钮
             self.update_ui_state()       # 更新UI显示（寄存器、PC、高亮等）
             return # 结束本次执行
 
-        # 2. --- 断点检查 (在执行指令之前) ---
+        # 2.断点检查 (在执行指令之前)
         current_pc = self.simulator.pc
         # 确保 pc_to_source_line_map 已加载且 PC 在有效范围内
+
         if hasattr(self.simulator, 'pc_to_source_line_map') and \
         self.simulator.pc_to_source_line_map and \
         0 <= current_pc < len(self.simulator.pc_to_source_line_map):
 
             source_line_num = self.simulator.pc_to_source_line_map[current_pc]
             if source_line_num in self.breakpoints:
-                # 命中断点！
+                # 命中断点
                 self.is_running_continuously = False # 停止连续运行
 
                 # print(f"--- DEBUG: 断点命中! - 'is_running_continuously' 设置为 {self.is_running_continuously} ---")
@@ -1353,7 +1392,7 @@ class App:
 
                 # 暂停执行，不调用 step() 也不安排下一次 after()
                 return
-                # --- 断点检查结束 ---
+                # 断点检查结束
 
         # 3. 如果没有命中断点，则执行一步
         # simulator.step() 会执行指令并更新PC。如果执行后出错或结束，它会返回 False。
@@ -1372,7 +1411,7 @@ class App:
         # 4. 更新UI并安排下一次执行
         self.update_ui_state() # 更新寄存器、PC、内存、高亮行等
 
-        # 再次检查，以防 step() 操作改变了状态 (例如，执行了最后一条指令)
+        # 再检查，以防 step() 操作改变了状态 (例如，执行了最后一条指令)
         # print(f"--- DEBUG: 准备安排下一次 after() - is_running: {self.is_running_continuously}, halted: {self.simulator.halted} ---")
 
         if self.is_running_continuously and not self.simulator.halted:
@@ -1393,29 +1432,31 @@ class App:
             self._continuous_run_job = None
         self._update_button_states() # 立即启用“执行”、“单步”等，禁用“停止”
 
-    def debug_print_memory(self):
-        """打印关键内存地址的内容以供调试。"""
-        print("\n--- 内存状态调试 ---")
-        if not hasattr(self.simulator, 'memory') or not self.simulator.memory:
-            print("模拟器内存尚未初始化。")
-            return
+    # 这是之前"内存调试"那个键用的,现在已经没用了
+    # def debug_print_memory(self):
+    #     # 打印关键内存地址的内容以供调试
+    #     print("\n--- 内存状态调试 ---")
+    #     if not hasattr(self.simulator, 'memory') or not self.simulator.memory:
+    #         print("模拟器内存尚未初始化。")
+    #         return
+    #
+    #     # 检查代码预期的ROM数据地址 (0x0100 对应字地址 128)
+    #     expected_data_addr = 128
+    #     # 检查之前错误的地址 (0x0200 对应字地址 256)
+    #     wrong_data_addr = 256
+    #
+    #     print(f"模拟器总内存大小: {len(self.simulator.memory)} 字")
+    #
+    #     if len(self.simulator.memory) > wrong_data_addr + 5: # 确保索引有效
+    #         print(f"内存地址 0x{expected_data_addr:04X} (字地址 {expected_data_addr}) 的内容: {self.simulator.memory[expected_data_addr]}")
+    #         print(f"内存地址 0x{wrong_data_addr:04X} (字地址 {wrong_data_addr}) 的内容: {self.simulator.memory[wrong_data_addr]}")
+    #
+    #         # 我们期望看到 self.simulator.memory[128] 的值是 "0000110100001100" (代表13和12)
+    #         # 而不是全0
+    #     else:
+    #         print("内存大小不足，无法执行此调试。")
+    #     print("--- 调试结束 ---\n")
 
-        # 检查代码预期的ROM数据地址 (0x0100 对应字地址 128)
-        expected_data_addr = 128
-        # 检查之前错误的地址 (0x0200 对应字地址 256)
-        wrong_data_addr = 256
-
-        print(f"模拟器总内存大小: {len(self.simulator.memory)} 字")
-
-        if len(self.simulator.memory) > wrong_data_addr + 5: # 确保索引有效
-            print(f"内存地址 0x{expected_data_addr:04X} (字地址 {expected_data_addr}) 的内容: {self.simulator.memory[expected_data_addr]}")
-            print(f"内存地址 0x{wrong_data_addr:04X} (字地址 {wrong_data_addr}) 的内容: {self.simulator.memory[wrong_data_addr]}")
-
-            # 我们期望看到 self.simulator.memory[128] 的值是 "0000110100001100" (代表13和12)
-            # 而不是全0
-        else:
-            print("内存大小不足，无法执行此调试。")
-        print("--- 调试结束 ---\n")
 
     def reset_simulator(self):
         self.is_running_continuously = False # 如果正在运行，则停止
