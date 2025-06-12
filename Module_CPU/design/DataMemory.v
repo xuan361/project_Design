@@ -77,6 +77,7 @@ module DataMemory(
             else if(DAddress == ledAddr + 3) begin
                 led4 <= DataIn[0];
             end
+            //  写入内存(RAM)
             else if(DAddress >= RAMStartAddress && DAddress < ledAddr)begin
                 // 写入内存,先写高八位，再写低八位
                 //小端模式：传入的数据低位要放在索引值小的存储单元里
@@ -88,25 +89,15 @@ module DataMemory(
                         RAM[RAMaddress] = DataIn[7:0];
                     end
             end
+            // 数码管对应输入数据
+            else if(DAddress >= digitAddress && DAddress < digitAddress + 6)begin
+                digit[DAddress - digitAddress] = DataIn[7:0];
+            end
         end
     end
 
-    // 数码管对应输入数据
-    always @(*) begin
-        digit[0] = RAM[0];
-        digit[1] = RAM[1];
-        digit[2] = RAM[2];
-        digit[3] = RAM[3];
-        digit[4] = RAM[4];
-        digit[5] = RAM[5];
-        // digit[0] = 8'd13;
-        // digit[1] = 8'd12;
-        // digit[2] = 8'd7;
-        // digit[3] = 8'd12;
-        // digit[4] = 8'd9;
-        // digit[5] = 8'd11;
-    end
-    
+  
+
     // 读取内存(内存到寄存器)
     always@(*)begin
         if (DAddress < RAMStartAddress) begin
@@ -125,6 +116,24 @@ module DataMemory(
         end
 
     end   
+/*
+    // 数码管对应输入数据
+    always @(*) begin
+        digit[0] = RAM[0];
+        digit[1] = RAM[1];
+        digit[2] = RAM[2];
+        digit[3] = RAM[3];
+        digit[4] = RAM[4];
+        digit[5] = RAM[5];
+        // digit[0] = 8'd13;
+        // digit[1] = 8'd12;
+        // digit[2] = 8'd7;
+        // digit[3] = 8'd12;
+        // digit[4] = 8'd9;
+        // digit[5] = 8'd11;
+    end
+*/  
+
 
 SixDigitDisplay display(CLK, RESET, digit[0], digit[1], digit[2], digit[3],digit[4], digit[5], dig1, dig2, dig3, dig4, dig5, dig6, out);
 
