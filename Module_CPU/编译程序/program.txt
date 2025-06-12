@@ -1,0 +1,58 @@
+addi a0, r0, 1   //a0 = 1,是后面复制到led对应内存区域的值(r3)
+lui a1, 0x20     //a1 = 0x2000,是led的内存起始地址
+lui a2, 0x06    //外层循环数
+lui a3, 0x60   //内层循环数
+start:
+addi a4, r0, 0     //a4是外层计数器
+outer_loop1:
+addi a5, r0, 0     //a5是内层计数器
+inner_loop1:
+addi a5, a5, 1
+ble a5, a3, inner_loop1
+addi a4, a4, 1
+ble a4, a2, outer_loop1
+sb a0, 0(a1)
+sb r0, 1(a1)
+sb r0, 2(a1)
+sb r0, 3(a1)
+
+addi a4, r0, 0     //a4是外层计数器
+outer_loop2:
+addi a5, r0, 0      //a5是内层计数器
+inner_loop2:
+addi a5, a5, 1
+ble a5, a3, inner_loop2
+addi a4, a4, 1
+ble a4, a2, outer_loop2
+sb r0, 0(a1)
+sb a0, 1(a1)
+sb r0, 2(a1)
+sb r0, 3(a1)
+
+addi a4, r0, 0      //a4是外层计数器
+outer_loop3:
+addi a5, r0, 0      //a5是内层计数器
+inner_loop3:
+addi a5, a5, 1
+ble a5, a3, inner_loop3
+addi a4, a4, 1
+ble a4, a2, outer_loop3
+sb r0, 0(a1)
+sb r0, 1(a1)
+sb a0, 2(a1)
+sb r0, 3(a1)
+
+
+addi a4, r0, 0     //a4是外层计数器
+outer_loop4:
+addi a5, r0, 0     //a5是内层计数器
+inner_loop4:
+addi a5, a5, 1
+ble a5, a3, inner_loop4
+addi a4, a4, 1
+ble a4, a2, outer_loop4
+sb r0, 0(a1)
+sb r0, 1(a1)
+sb r0, 2(a1)
+sb a0, 3(a1)
+jal r1, start

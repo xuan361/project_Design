@@ -1,0 +1,58 @@
+// 0000 rom
+// 1000 ram
+// 2000 led
+// 3000 数码管
+start:  //把 data section 从 flash(ROM) 搬运到 ram 中
+    li a0, 0x0100    // flash(ROM) 的起始地址a0,对应r3寄存器
+    li a1, 0x1000  // ram 的起始地址a1 if number > 256 then lui a1, 0x10,  addi a1, a1, 0x00
+    li a2, 0x1005    // ram 的结束地址a2  lui a1, 0x10,  addi a1, 0x06
+
+    addi a3, a0, 0     // ROM->RAM的ROM地址寄存器a3 (r6)
+    addi a4, a1, 0     // ROM->RAM的RAM地址寄存器a4
+
+move_loop:             // 循环移动数据，数据通过a5寄存器进行传递
+    lb a5, 0(a3)
+    sb a5, 0(a4)
+    addi a3, a3, 1
+    addi a4, a4, 1
+    ble a4, a2, move_loop
+
+begin:
+    addi a4, a2, -1 // a6的截止地点
+    addi a6, a1, 0  // 头指针 a6
+
+outer_loop1:
+    addi a7, a6, 1  // 尾指针 a7
+    inner_loop1:    // 头寄存器 a8, 尾寄存器 a9
+        lb a8, 0(a6)
+        lb a9, 0(a7)
+        ble a8, a9, no_swap
+        sb a9, 0(a6)
+        sb a8, 0(a7)
+        no_swap:
+            addi a7, a7, 1
+            ble a7, a2, inner_loop1
+    addi a6, a6, 1
+    ble a6, a4, outer_loop1_mid
+    jal  move_digital_start
+outer_loop1_mid:
+    jal  outer_loop1
+
+// 进行RAM到数码管区域的数据传输，即0x1000-0x1005 传输到0x3000-0x3005
+move_digital_start:
+    li a3 0x3000        // 数码管起始地址a3
+    addi a4, a1, 0     // RAM->数码管的RAM地址寄存器a4
+
+move_digital_loop:
+    lb a5, 0(a4)
+    sb a5, 0(a3)
+    addi a4, a4, 1
+    addi a3, a3, 1
+    ble a4, a2, move_digital_loop
+
+    
+end_sort:
+    jal r0, end_sort
+
+_data_lma:
+    .byte 13, 12, 7, 12, 9, 11       //内存空间为8位
