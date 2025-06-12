@@ -456,7 +456,7 @@ if __name__ == '__main__':
     """
     
     try:
-        with open('program.txt', 'r', encoding='utf-8') as f:
+        with open('program2.txt', 'r', encoding='utf-8') as f:
             lines = f.readlines()
     except FileNotFoundError:
         print("Error: program.txt not found. Please ensure the file exists in the same directory.")

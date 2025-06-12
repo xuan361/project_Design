@@ -18,8 +18,8 @@ module cpu_system_tb();
     wire  dig4; 
     wire  dig5; 
     wire  dig6; 
-    wire [6:0] out;
-    
+    wire [6:0] out; 
+
     localparam MAX_INSTRUCTIONS = 256; // Testbench内存能存储的最大指令数
 
     // 实例化顶层模块
@@ -32,9 +32,16 @@ module cpu_system_tb();
         .led2(led2),
         .led3(led3),
         .led4(led4),
-        .seg(seg),
-        .sel(sel)
+
+        .dig1(dig1),
+        .dig2(dig2),
+        .dig3(dig3),
+        .dig4(dig4),
+        .dig5(dig5),
+        .dig6(dig6),
+        .out(out)
     );
+
 
     // 时钟生成
     localparam CLK_PERIOD = 20; // 50MHz 时钟周期

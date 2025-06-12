@@ -785,7 +785,7 @@ class App:
         self.go_to_memory_address()
 
         # hardcoded_filepath = "D:/UESTC/2.2/ZhongShe/assembler_py/src/program.txt"
-        hardcoded_filepath = "program.txt"
+        hardcoded_filepath = "program2.txt"
 
         if hardcoded_filepath: # 确保路径不是空字符串
             print(f"尝试从预设路径加载文件: {hardcoded_filepath}")
